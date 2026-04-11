@@ -66,9 +66,7 @@ export interface DailyKPIs {
   revenueCash: number;
   revenueTransfer: number;
   totalRevenue: number;
-  ordersGinna: number;
-  ordersDiana: number;
-  ordersChiquis: number;
+  ordersPaola: number;
   totalCosts: number;
   totalOperatingCosts: number;
   profit: number;

@@ -24,7 +24,7 @@ import { cn, formatCurrency, getDayOfWeek } from '@/lib/utils'
 
 const DELIVERY_STATUS_OPTIONS = ['Confirmado', 'Entregado', 'Devolucion', 'Cancelado'] as const
 const DELIVERY_TYPE_OPTIONS = ['Bogo', 'Bodega', 'Otros', ''] as const
-const VENDOR_OPTIONS = ['Ginna', 'Diana', 'Chiquis', '']
+const VENDOR_OPTIONS = ['Paola']
 
 function padDate(n: number) {
   return String(n).padStart(2, '0')
@@ -83,9 +83,7 @@ function computeKPIs(orders: Order[]): DailyKPIs {
     revenueCash: delivered.reduce((s, o) => s + (o.payment_cash ?? 0), 0),
     revenueTransfer: delivered.reduce((s, o) => s + (o.payment_transfer ?? 0), 0),
     totalRevenue: delivered.reduce((s, o) => s + (o.value_to_collect ?? 0), 0),
-    ordersGinna: orders.filter((o) => o.vendor === 'Ginna').length,
-    ordersDiana: orders.filter((o) => o.vendor === 'Diana').length,
-    ordersChiquis: orders.filter((o) => o.vendor === 'Chiquis').length,
+    ordersPaola: orders.filter((o) => o.vendor === 'Paola').length,
     totalCosts: orders.reduce((s, o) => s + (o.product_cost ?? 0), 0),
     totalOperatingCosts: orders.reduce((s, o) => s + (o.operating_cost ?? 0), 0),
     profit:
@@ -435,14 +433,7 @@ export default function DailyOrdersPage({
           </div>
         </div>
 
-        <div className="space-y-1">
-          <span className="text-xs text-gray-500">Por Vendedora</span>
-          <div className="flex flex-col gap-0.5 text-xs font-medium text-gray-700">
-            <span>Ginna: {kpis.ordersGinna}</span>
-            <span>Diana: {kpis.ordersDiana}</span>
-            <span>Chiquis: {kpis.ordersChiquis}</span>
-          </div>
-        </div>
+        <KPIItem label="Paola" value={kpis.ordersPaola} />
 
         <KPIItem label="Costos" value={formatCurrency(kpis.totalCosts)} />
         <KPIItem label="Gastos Op." value={formatCurrency(kpis.totalOperatingCosts)} />

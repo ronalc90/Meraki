@@ -9,6 +9,9 @@ import {
   ChevronLeft,
   ChevronRight,
   User,
+  Download,
+  PercentCircle,
+  Star,
 } from 'lucide-react'
 import {
   BarChart,
@@ -18,11 +21,16 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from 'recharts'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import type { Order } from '@/lib/types'
 import { cn, formatCurrency } from '@/lib/utils'
+import { downloadExcel } from '@/lib/export'
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -174,9 +182,33 @@ export default function DashboardPage() {
 
   const profit = totalRevenue - totalExpenses
 
-  const ordersGinna   = orders.filter((o) => o.vendor?.toLowerCase().includes('ginna')).length
-  const ordersDiana   = orders.filter((o) => o.vendor?.toLowerCase().includes('diana')).length
-  const ordersChiquis = orders.filter((o) => o.vendor?.toLowerCase().includes('chiquis')).length
+  const ordersPaola = orders.filter((o) => o.vendor?.toLowerCase().includes('paola')).length
+
+  const totalOrders = orders.length
+  const avgPerOrder = delivered.length > 0 ? totalRevenue / delivered.length : 0
+  const returnRate = totalOrders > 0 ? ((returns.length / totalOrders) * 100).toFixed(1) : '0.0'
+  const cancelRate = totalOrders > 0 ? ((cancelled.length / totalOrders) * 100).toFixed(1) : '0.0'
+
+  // Top 5 products by product_ref
+  const productMap = delivered.reduce<Record<string, { count: number; total: number }>>((acc, o) => {
+    const ref = o.product_ref?.trim()
+    if (!ref) return acc
+    if (!acc[ref]) acc[ref] = { count: 0, total: 0 }
+    acc[ref].count += 1
+    acc[ref].total += o.value_to_collect ?? 0
+    return acc
+  }, {})
+  const top5Products = Object.entries(productMap)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 5)
+
+  // Payment breakdown for pie chart
+  const paymentPieData = [
+    { name: 'Bogo', value: revenueBogo },
+    { name: 'Caja', value: revenueCash },
+    { name: 'Transferencia', value: revenueTransfer },
+  ].filter((d) => d.value > 0)
+  const PIE_COLORS = ['#7c3aed', '#10b981', '#0ea5e9']
 
   // Chart data: revenue per day
   const daysInMonth = new Date(year, month, 0).getDate()
@@ -201,7 +233,7 @@ export default function DashboardPage() {
             <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
             <p className="text-xs text-gray-500">Tu Tienda Meraki</p>
           </div>
-          {/* Month selector */}
+          {/* Month selector + Export */}
           <div className="flex items-center gap-2">
             <button
               onClick={prevMonth}
@@ -217,6 +249,22 @@ export default function DashboardPage() {
               className="rounded-xl border border-gray-200 p-2 hover:bg-gray-50 transition-colors"
             >
               <ChevronRight className="h-4 w-4 text-gray-600" />
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  await downloadExcel('dashboard', {
+                    month: String(month),
+                    year: String(year),
+                  })
+                } catch {
+                  toast.error('Error al exportar')
+                }
+              }}
+              className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-colors"
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Exportar</span>
             </button>
           </div>
         </div>
@@ -281,13 +329,33 @@ export default function DashboardPage() {
               />
             </div>
 
-            {/* Vendor cards */}
+            {/* Extra KPI cards */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <KPICard
+                label="Promedio por Pedido"
+                value={formatCurrency(avgPerOrder)}
+                icon={<Banknote className="h-5 w-5" />}
+                color="#8b5cf6"
+              />
+              <KPICard
+                label="Tasa Devolución"
+                value={`${returnRate}%`}
+                icon={<PercentCircle className="h-5 w-5" />}
+                color="#f59e0b"
+              />
+              <KPICard
+                label="Tasa Cancelación"
+                value={`${cancelRate}%`}
+                icon={<PercentCircle className="h-5 w-5" />}
+                color="#ef4444"
+              />
+            </div>
+
+            {/* Vendor card */}
             <div>
-              <h2 className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wide">Vendedoras</h2>
+              <h2 className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wide">Vendedora</h2>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <VendorCard name="Ginna" count={ordersGinna} color="#7c3aed" />
-                <VendorCard name="Diana" count={ordersDiana} color="#f59e0b" />
-                <VendorCard name="Chiquis" count={ordersChiquis} color="#10b981" />
+                <VendorCard name="Paola" count={ordersPaola} color="#7c3aed" />
               </div>
             </div>
 
@@ -328,6 +396,80 @@ export default function DashboardPage() {
                   Sin datos de recaudo para este mes
                 </div>
               )}
+            </div>
+
+            {/* Top 5 Productos + Payment pie */}
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {/* Top 5 */}
+              <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-4">
+                <h2 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                  <Star className="h-4 w-4 text-amber-400" />
+                  Top 5 Productos
+                </h2>
+                {top5Products.length === 0 ? (
+                  <div className="flex h-32 items-center justify-center text-sm text-gray-400">
+                    Sin datos de pedidos entregados
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {top5Products.map(([ref, stats], idx) => (
+                      <div key={ref} className="flex items-center gap-3">
+                        <span
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                          style={{ background: idx === 0 ? '#7c3aed' : idx === 1 ? '#8b5cf6' : '#a78bfa' }}
+                        >
+                          {idx + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-gray-800">{ref}</p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <span className="text-xs font-bold text-gray-900">{stats.count} ped.</span>
+                          <span className="ml-2 text-xs text-gray-500">{formatCurrency(stats.total)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Payment breakdown pie */}
+              <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-4">
+                <h2 className="text-sm font-semibold text-gray-700 mb-4">Recaudo por Método de Pago</h2>
+                {paymentPieData.length === 0 ? (
+                  <div className="flex h-32 items-center justify-center text-sm text-gray-400">
+                    Sin datos de recaudo
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={180}>
+                    <PieChart>
+                      <Pie
+                        data={paymentPieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={45}
+                        outerRadius={70}
+                        paddingAngle={3}
+                        dataKey="value"
+                        label={({ name, percent }) =>
+                          `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
+                        }
+                        labelLine={false}
+                      >
+                        {paymentPieData.map((_, i) => (
+                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => [formatCurrency(Number(value ?? 0)), 'Recaudo']} />
+                      <Legend
+                        formatter={(value) => (
+                          <span className="text-xs text-gray-600">{value}</span>
+                        )}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
             </div>
 
             {/* Recent orders */}

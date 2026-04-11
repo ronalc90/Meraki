@@ -38,24 +38,20 @@ export async function getSession(): Promise<{ username: string } | null> {
   return verifySession(token);
 }
 
-export async function login(username: string, password: string): Promise<{ success: boolean; token?: string; error?: string }> {
-  const validUsername = process.env.AUTH_USERNAME || 'Paola';
+const USERS: Record<string, string> = {
+  paola: '1234',
+  ronald: '1234',
+};
 
-  if (username.toLowerCase() !== validUsername.toLowerCase()) {
+export async function login(username: string, password: string): Promise<{ success: boolean; token?: string; error?: string }> {
+  const normalizedUser = username.toLowerCase().trim();
+  const validPassword = USERS[normalizedUser];
+
+  if (!validPassword) {
     return { success: false, error: 'Usuario no encontrado' };
   }
 
-  const storedHash = process.env.AUTH_PASSWORD_HASH;
-  if (!storedHash || storedHash === '$2a$10$placeholder') {
-    if (password === '1234') {
-      const token = await createSession(username);
-      return { success: true, token };
-    }
-    return { success: false, error: 'Contraseña incorrecta' };
-  }
-
-  const valid = await verifyPassword(password, storedHash);
-  if (!valid) {
+  if (password !== validPassword) {
     return { success: false, error: 'Contraseña incorrecta' };
   }
 

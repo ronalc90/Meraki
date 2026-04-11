@@ -1,11 +1,13 @@
 'use client'
 
 import { use, useEffect, useState, useCallback } from 'react'
-import { Plus, Search, Pencil, Trash2, X, Check, AlertTriangle, PackageSearch } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, X, Check, AlertTriangle, PackageSearch, Download, Camera } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import type { Product } from '@/lib/types'
 import { cn, formatCurrency } from '@/lib/utils'
+import { downloadExcel } from '@/lib/export'
+import ProductPhotoAI from '@/components/products/ProductPhotoAI'
 
 const CATEGORIES = ['Pantuflas', 'Maxisaco', 'Pocillo', 'Bolso', 'Otro'] as const
 type Category = (typeof CATEGORIES)[number]
@@ -104,6 +106,7 @@ export default function ProductsPage({
   const [deleting, setDeleting] = useState(false)
 
   const [form, setForm] = useState({ ...EMPTY_FORM })
+  const [showPhotoAI, setShowPhotoAI] = useState(false)
 
   const fetchProducts = useCallback(async () => {
     setLoading(true)
@@ -228,14 +231,36 @@ export default function ProductsPage({
             {products.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <button
-          onClick={openAdd}
-          className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 active:translate-y-0"
-          style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #9061f9 100%)' }}
-        >
-          <Plus className="h-4 w-4" />
-          Nuevo Producto
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              try {
+                await downloadExcel('products')
+              } catch {
+                toast.error('Error al exportar')
+              }
+            }}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">Exportar</span>
+          </button>
+          <button
+            onClick={() => setShowPhotoAI(true)}
+            className="inline-flex items-center gap-2 rounded-xl border-2 border-purple-300 bg-purple-50 px-4 py-2.5 text-sm font-semibold text-purple-700 transition-all hover:bg-purple-100"
+          >
+            <Camera className="h-4 w-4" />
+            <span className="hidden sm:inline">Con Foto IA</span>
+          </button>
+          <button
+            onClick={openAdd}
+            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 active:translate-y-0"
+            style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #9061f9 100%)' }}
+          >
+            <Plus className="h-4 w-4" />
+            Nuevo Producto
+          </button>
+        </div>
       </div>
 
       {!supabaseOk && <SupabaseBanner />}
@@ -538,6 +563,26 @@ export default function ProductsPage({
           </div>
         </div>
       </Modal>
+
+      {/* Photo AI Modal */}
+      {showPhotoAI && (
+        <ProductPhotoAI
+          onClose={() => setShowPhotoAI(false)}
+          onProductAnalyzed={(analyzed) => {
+            setShowPhotoAI(false);
+            setForm({
+              code: analyzed.code,
+              name: analyzed.name,
+              cost: String(analyzed.suggested_cost),
+              category: (CATEGORIES.includes(analyzed.category as Category) ? analyzed.category : 'Otro') as Category,
+              active: true,
+            });
+            setEditingProduct(null);
+            setModalOpen(true);
+            toast.success('Datos del producto cargados. Revisa y guarda.');
+          }}
+        />
+      )}
     </div>
   )
 }

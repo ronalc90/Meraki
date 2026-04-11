@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { getServiceClient } from '@/lib/supabase';
 
 const SYSTEM_PROMPT = `Eres un asistente de "Tu Tienda Meraki", un negocio colombiano de pantuflas, maxisacos y accesorios.
 
@@ -44,8 +45,26 @@ Reglas:
 - Si hay instrucciones como "llamar cliente" o mensajes especiales, van en comment
 - La ciudad por defecto es Bogotá si no se especifica`;
 
+async function resolveApiKey(): Promise<string | null> {
+  try {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'openai_api_key')
+      .maybeSingle();
+
+    if (!error && data?.value?.trim()) {
+      return data.value.trim();
+    }
+  } catch {
+    // fall through to env var
+  }
+  return process.env.OPENAI_API_KEY ?? null;
+}
+
 export async function POST(request: NextRequest) {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = await resolveApiKey();
 
   if (!apiKey) {
     return NextResponse.json(

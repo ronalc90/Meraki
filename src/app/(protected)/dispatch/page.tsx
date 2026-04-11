@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   Printer,
   MapPin,
@@ -11,6 +11,8 @@ import {
   X,
   Truck,
   Navigation,
+  Package,
+  DollarSign,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
@@ -25,11 +27,16 @@ function todayISO(): string {
   return `${y}-${m}-${day}`
 }
 
-interface RouteGroup {
-  zone: string
-  orders: Order[]
-  expanded: boolean
+function formatDateDisplay(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  const months = [
+    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+  ]
+  return `${parseInt(d)} de ${months[parseInt(m) - 1]} de ${y}`
 }
+
+// ─── PrintView (Guías) ───────────────────────────────────────────────────────
 
 function PrintView({ orders, onClose }: { orders: Order[]; onClose: () => void }) {
   return (
@@ -57,80 +64,121 @@ function PrintView({ orders, onClose }: { orders: Order[]; onClose: () => void }
         </div>
       </div>
 
-      {/* Cards */}
-      <div className="p-6 print:p-0">
+      {/* Cards grid — 2 per row, page break every 4 cards */}
+      <div className="print-area p-6 print:p-0">
         <div className="grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-4 print:gap-0">
-          {orders.map((order, idx) => (
-            <div
-              key={order.id}
-              className={cn(
-                'border-2 border-dashed border-gray-400 rounded-lg p-4 print:rounded-none print:border print:border-dashed print:border-gray-600 print:break-inside-avoid',
-                idx < orders.length - 1 ? 'print:mb-2' : ''
-              )}
-            >
-              {/* Card header */}
-              <div className="text-center mb-3 pb-2 border-b border-gray-300">
-                <p className="font-black text-lg tracking-tight text-gray-900">Tu Tienda Meraki</p>
-              </div>
+          {orders.map((order, idx) => {
+            // After every 4th card (index 3, 7, 11…) force a page break
+            const isLastInPage = (idx + 1) % 4 === 0 && idx !== orders.length - 1
+            return (
+              <div
+                key={order.id}
+                className={cn(
+                  'border-2 border-solid border-gray-700 rounded-lg p-4 flex flex-col',
+                  'print:rounded-none print:border print:border-solid print:border-gray-800',
+                  'print:break-inside-avoid print:m-1',
+                  isLastInPage ? 'print:break-after-page' : ''
+                )}
+              >
+                {/* Card header */}
+                <div className="text-center mb-3 pb-2 border-b-2 border-solid border-gray-400">
+                  <p className="font-black text-xl tracking-tight text-gray-900 uppercase">
+                    Tu Tienda Meraki
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">Guía de Envío</p>
+                </div>
 
-              <dl className="space-y-1.5 text-sm">
-                <div className="flex gap-2">
-                  <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">ID Pedido</dt>
-                  <dd className="font-bold text-gray-900">{order.order_code}</dd>
-                </div>
-                <div className="flex gap-2">
-                  <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">Cliente</dt>
-                  <dd className="font-medium text-gray-800">{order.client_name}</dd>
-                </div>
-                <div className="flex gap-2">
-                  <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">Celular</dt>
-                  <dd className="text-gray-800">{order.phone}</dd>
-                </div>
-                <div className="flex gap-2">
-                  <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">Dirección</dt>
-                  <dd className="text-gray-800">{order.address}</dd>
-                </div>
-                {order.complement && (
+                <dl className="flex-1 space-y-1.5 text-sm">
                   <div className="flex gap-2">
-                    <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">Complemento</dt>
-                    <dd className="text-gray-800">{order.complement}</dd>
+                    <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      ID Pedido
+                    </dt>
+                    <dd className="font-bold text-gray-900">{order.order_code}</dd>
                   </div>
-                )}
-                <div className="flex gap-2">
-                  <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">Referencia</dt>
-                  <dd className="text-gray-800">{order.product_ref}</dd>
-                </div>
-                {order.detail && (
                   <div className="flex gap-2">
-                    <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">Detalle</dt>
-                    <dd className="text-gray-800">{order.detail}</dd>
+                    <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      Cliente
+                    </dt>
+                    <dd className="font-medium text-gray-800">{order.client_name}</dd>
                   </div>
-                )}
-                <div className="flex gap-2 pt-1 border-t border-gray-200">
-                  <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">Valor a cobrar</dt>
-                  <dd className="text-xl font-black text-gray-900">{formatCurrency(order.value_to_collect)}</dd>
-                </div>
-                {order.comment && (
                   <div className="flex gap-2">
-                    <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">Comentario</dt>
-                    <dd className="text-gray-700 italic">{order.comment}</dd>
+                    <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      Celular
+                    </dt>
+                    <dd className="text-gray-800">{order.phone}</dd>
                   </div>
-                )}
-              </dl>
+                  <div className="flex gap-2">
+                    <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      Dirección
+                    </dt>
+                    <dd className="text-gray-800">{order.address}</dd>
+                  </div>
+                  {order.complement && (
+                    <div className="flex gap-2">
+                      <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Barrio
+                      </dt>
+                      <dd className="text-gray-800">{order.complement}</dd>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      Referencia
+                    </dt>
+                    <dd className="text-gray-800">{order.product_ref}</dd>
+                  </div>
+                  {order.detail && (
+                    <div className="flex gap-2">
+                      <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Detalle
+                      </dt>
+                      <dd className="text-gray-800">{order.detail}</dd>
+                    </div>
+                  )}
+                  <div className="flex gap-2 pt-2 border-t-2 border-solid border-gray-300 mt-2">
+                    <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      Valor a cobrar
+                    </dt>
+                    <dd className="text-xl font-black text-gray-900">
+                      {formatCurrency(order.value_to_collect)}
+                    </dd>
+                  </div>
+                  {order.comment && (
+                    <div className="flex gap-2">
+                      <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Comentario
+                      </dt>
+                      <dd className="text-gray-700 italic">{order.comment}</dd>
+                    </div>
+                  )}
+                </dl>
 
-              {/* Card footer */}
-              <div className="mt-3 pt-2 border-t border-gray-300 text-center">
-                <p className="text-xs text-gray-500">Mayor Información 3203880422</p>
+                {/* Card footer — pinned to bottom */}
+                <div className="mt-4 pt-2 border-t-2 border-solid border-gray-400 text-center">
+                  <p className="text-xs font-semibold text-gray-600">
+                    Mayor Información 3203880422
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>
   )
 }
 
-function RouteView({ orders, onClose }: { orders: Order[]; onClose: () => void }) {
+// ─── RouteView ───────────────────────────────────────────────────────────────
+
+function RouteView({
+  orders,
+  date,
+  onClose,
+}: {
+  orders: Order[]
+  date: string
+  onClose: () => void
+}) {
   const groups = orders.reduce<Record<string, Order[]>>((acc, order) => {
     const zone = (order.complement?.trim() || 'Sin barrio').split(/[,;]/)[0].trim()
     if (!acc[zone]) acc[zone] = []
@@ -142,80 +190,232 @@ function RouteView({ orders, onClose }: { orders: Order[]; onClose: () => void }
     Object.keys(groups).reduce((a, k) => ({ ...a, [k]: true }), {})
   )
 
+  // Sort zones by number of orders descending
   const sorted = Object.entries(groups).sort((a, b) => b[1].length - a[1].length)
+
+  const totalValue = orders.reduce((sum, o) => sum + o.value_to_collect, 0)
 
   return (
     <div className="fixed inset-0 z-50 bg-gray-50 overflow-y-auto">
-      <div className="sticky top-0 flex items-center justify-between gap-3 bg-white border-b border-gray-200 px-4 py-3 shadow-sm">
+      {/* Screen-only top bar */}
+      <div className="print:hidden sticky top-0 flex items-center justify-between gap-3 bg-white border-b border-gray-200 px-4 py-3 shadow-sm">
         <div>
           <h2 className="font-bold text-gray-900">Ruta sugerida</h2>
-          <p className="text-xs text-gray-500">{sorted.length} zonas — {orders.length} pedidos</p>
+          <p className="text-xs text-gray-500">
+            {sorted.length} zona{sorted.length !== 1 ? 's' : ''} — {orders.length} pedido
+            {orders.length !== 1 ? 's' : ''}
+          </p>
         </div>
-        <button onClick={onClose} className="rounded-xl border border-gray-200 p-2 hover:bg-gray-50">
-          <X className="h-5 w-5 text-gray-500" />
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white"
+            style={{ background: '#7c3aed' }}
+          >
+            <Printer className="h-4 w-4" />
+            Imprimir Ruta
+          </button>
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-gray-200 p-2 hover:bg-gray-50"
+          >
+            <X className="h-5 w-5 text-gray-500" />
+          </button>
+        </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 py-4 space-y-3">
-        {sorted.map(([zone, zoneOrders], idx) => (
-          <div key={zone} className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
-            <button
-              onClick={() => setExpanded((prev) => ({ ...prev, [zone]: !prev[zone] }))}
-              className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50"
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white text-xs font-bold"
-                  style={{ background: '#7c3aed' }}
-                >
-                  {idx + 1}
-                </div>
-                <div className="text-left">
-                  <p className="font-semibold text-gray-900 flex items-center gap-1.5">
-                    <MapPin className="h-3.5 w-3.5 text-purple-500" />
-                    {zone}
-                  </p>
-                  <p className="text-xs text-gray-500">{zoneOrders.length} pedido{zoneOrders.length !== 1 ? 's' : ''}</p>
-                </div>
-              </div>
-              {expanded[zone]
-                ? <ChevronUp className="h-4 w-4 text-gray-400" />
-                : <ChevronDown className="h-4 w-4 text-gray-400" />
-              }
-            </button>
+      {/* ── Print area ─────────────────────────────────────────────────────── */}
+      <div className="print-area print:p-6">
+        {/* Print header — hidden on screen */}
+        <div className="hidden print:block mb-6 border-b-2 border-gray-800 pb-4">
+          <h1 className="text-2xl font-black text-center text-gray-900 uppercase tracking-tight">
+            Tu Tienda Meraki — Ruta de Envío
+          </h1>
+          <p className="text-center text-sm text-gray-600 mt-1">
+            Fecha: {formatDateDisplay(date)}
+          </p>
+        </div>
 
-            {expanded[zone] && (
-              <div className="border-t border-gray-100 divide-y divide-gray-50">
-                {zoneOrders.map((order) => (
-                  <div key={order.id} className="px-4 py-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-gray-900 text-sm">{order.client_name}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{order.address}</p>
-                        <p className="text-xs text-gray-400">{order.phone} · {order.product_ref}</p>
-                      </div>
-                      <span className="shrink-0 font-bold text-sm" style={{ color: '#7c3aed' }}>
-                        {formatCurrency(order.value_to_collect)}
-                      </span>
+        {/* Route summary */}
+        <div className="print:hidden max-w-2xl mx-auto px-4 pt-4">
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="rounded-2xl bg-white border border-gray-100 shadow-sm px-4 py-3 flex flex-col items-center">
+              <MapPin className="h-5 w-5 mb-1" style={{ color: '#7c3aed' }} />
+              <span className="text-xl font-black text-gray-900">{sorted.length}</span>
+              <span className="text-xs text-gray-500">paradas</span>
+            </div>
+            <div className="rounded-2xl bg-white border border-gray-100 shadow-sm px-4 py-3 flex flex-col items-center">
+              <Package className="h-5 w-5 mb-1" style={{ color: '#7c3aed' }} />
+              <span className="text-xl font-black text-gray-900">{orders.length}</span>
+              <span className="text-xs text-gray-500">pedidos</span>
+            </div>
+            <div className="rounded-2xl bg-white border border-gray-100 shadow-sm px-4 py-3 flex flex-col items-center">
+              <DollarSign className="h-5 w-5 mb-1" style={{ color: '#10b981' }} />
+              <span className="text-lg font-black" style={{ color: '#10b981' }}>
+                {formatCurrency(totalValue)}
+              </span>
+              <span className="text-xs text-gray-500">a cobrar</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Print summary table header */}
+        <div className="hidden print:block mb-4">
+          <div className="grid grid-cols-3 gap-4 text-sm text-gray-700 border border-gray-300 rounded p-3 bg-gray-50">
+            <span>
+              <strong>Paradas:</strong> {sorted.length}
+            </span>
+            <span>
+              <strong>Pedidos:</strong> {orders.length}
+            </span>
+            <span>
+              <strong>Total a cobrar:</strong> {formatCurrency(totalValue)}
+            </span>
+          </div>
+        </div>
+
+        {/* Print table */}
+        <div className="hidden print:block">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="border border-gray-400 px-2 py-1 text-left">#</th>
+                <th className="border border-gray-400 px-2 py-1 text-left">Barrio / Zona</th>
+                <th className="border border-gray-400 px-2 py-1 text-left">Cliente</th>
+                <th className="border border-gray-400 px-2 py-1 text-left">Dirección</th>
+                <th className="border border-gray-400 px-2 py-1 text-left">Teléfono</th>
+                <th className="border border-gray-400 px-2 py-1 text-left">Producto</th>
+                <th className="border border-gray-400 px-2 py-1 text-right">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.flatMap(([zone, zoneOrders], stopIdx) =>
+                zoneOrders.map((order, oIdx) => (
+                  <tr
+                    key={order.id}
+                    className={stopIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                  >
+                    <td className="border border-gray-300 px-2 py-1 font-bold text-center">
+                      {oIdx === 0 ? stopIdx + 1 : ''}
+                    </td>
+                    <td className="border border-gray-300 px-2 py-1 font-semibold">
+                      {oIdx === 0 ? zone : ''}
+                    </td>
+                    <td className="border border-gray-300 px-2 py-1">{order.client_name}</td>
+                    <td className="border border-gray-300 px-2 py-1">{order.address}</td>
+                    <td className="border border-gray-300 px-2 py-1">{order.phone}</td>
+                    <td className="border border-gray-300 px-2 py-1">{order.product_ref}</td>
+                    <td className="border border-gray-300 px-2 py-1 text-right font-semibold">
+                      {formatCurrency(order.value_to_collect)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+            <tfoot>
+              <tr className="bg-gray-100 font-bold">
+                <td colSpan={6} className="border border-gray-400 px-2 py-1 text-right">
+                  Total
+                </td>
+                <td className="border border-gray-400 px-2 py-1 text-right">
+                  {formatCurrency(totalValue)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+          {/* Print footer */}
+          <div className="mt-6 pt-4 border-t border-gray-400 flex justify-between text-xs text-gray-500">
+            <span>Tu Tienda Meraki — 3203880422</span>
+            <span>
+              Total pedidos: {orders.length} | Total valor: {formatCurrency(totalValue)}
+            </span>
+          </div>
+        </div>
+
+        {/* ── Interactive stops (screen only) ────────────────────────────── */}
+        <div className="print:hidden max-w-2xl mx-auto px-4 pb-6 space-y-3">
+          {sorted.map(([zone, zoneOrders], idx) => {
+            const zoneTotal = zoneOrders.reduce((s, o) => s + o.value_to_collect, 0)
+            return (
+              <div
+                key={zone}
+                className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden"
+              >
+                <button
+                  onClick={() => setExpanded((prev) => ({ ...prev, [zone]: !prev[zone] }))}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white text-xs font-black"
+                      style={{ background: '#7c3aed' }}
+                    >
+                      {idx + 1}
+                    </div>
+                    <div className="text-left">
+                      <p className="font-semibold text-gray-900 flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5 text-purple-500" />
+                        <span>Parada {idx + 1} — {zone}</span>
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {zoneOrders.length} pedido{zoneOrders.length !== 1 ? 's' : ''} ·{' '}
+                        <span style={{ color: '#10b981' }} className="font-semibold">
+                          {formatCurrency(zoneTotal)}
+                        </span>
+                      </p>
                     </div>
                   </div>
-                ))}
+                  {expanded[zone] ? (
+                    <ChevronUp className="h-4 w-4 text-gray-400" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-gray-400" />
+                  )}
+                </button>
+
+                {expanded[zone] && (
+                  <div className="border-t border-gray-100 divide-y divide-gray-50">
+                    {zoneOrders.map((order) => (
+                      <div key={order.id} className="px-4 py-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-gray-900 text-sm">
+                              {order.client_name}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">{order.address}</p>
+                            <p className="text-xs text-gray-400">
+                              {order.phone} · {order.product_ref}
+                            </p>
+                          </div>
+                          <span
+                            className="shrink-0 font-bold text-sm"
+                            style={{ color: '#7c3aed' }}
+                          >
+                            {formatCurrency(order.value_to_collect)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        ))}
+            )
+          })}
+        </div>
       </div>
     </div>
   )
 }
+
+// ─── Main page ───────────────────────────────────────────────────────────────
+
+type ViewMode = 'guias' | 'ruta'
 
 export default function DispatchPage() {
   const [date, setDate] = useState(todayISO())
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<Set<number>>(new Set())
-  const [showPrint, setShowPrint] = useState(false)
-  const [showRoute, setShowRoute] = useState(false)
+  const [activeView, setActiveView] = useState<ViewMode | null>(null)
 
   const loadOrders = useCallback(async (d: string) => {
     setLoading(true)
@@ -302,11 +502,15 @@ export default function DispatchPage() {
           <>
             {/* Select all */}
             <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm border border-gray-100">
-              <button onClick={toggleAll} className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                {allSelected
-                  ? <CheckSquare className="h-5 w-5" style={{ color: '#7c3aed' }} />
-                  : <Square className="h-5 w-5 text-gray-400" />
-                }
+              <button
+                onClick={toggleAll}
+                className="flex items-center gap-2 text-sm font-medium text-gray-700"
+              >
+                {allSelected ? (
+                  <CheckSquare className="h-5 w-5" style={{ color: '#7c3aed' }} />
+                ) : (
+                  <Square className="h-5 w-5 text-gray-400" />
+                )}
                 Seleccionar todos ({orders.length})
               </button>
             </div>
@@ -320,15 +524,18 @@ export default function DispatchPage() {
                   onClick={() => toggleOne(order.id)}
                   className={cn(
                     'w-full text-left rounded-2xl border-2 bg-white p-4 shadow-sm transition-all',
-                    isSelected ? 'border-purple-400 bg-purple-50' : 'border-gray-100 hover:border-gray-300'
+                    isSelected
+                      ? 'border-purple-400 bg-purple-50'
+                      : 'border-gray-100 hover:border-gray-300'
                   )}
                 >
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 shrink-0">
-                      {isSelected
-                        ? <CheckSquare className="h-5 w-5" style={{ color: '#7c3aed' }} />
-                        : <Square className="h-5 w-5 text-gray-300" />
-                      }
+                      {isSelected ? (
+                        <CheckSquare className="h-5 w-5" style={{ color: '#7c3aed' }} />
+                      ) : (
+                        <Square className="h-5 w-5 text-gray-300" />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -362,45 +569,59 @@ export default function DispatchPage() {
         )}
       </div>
 
-      {/* Bottom action bar */}
+      {/* Bottom action bar — toggle between Guías / Ruta */}
       {selected.size > 0 && (
         <div className="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 shadow-lg px-4 py-3 z-10">
           <div className="mx-auto max-w-3xl">
             <div className="flex items-center justify-between gap-3 mb-3">
               <div className="text-sm text-gray-600">
-                <span className="font-bold text-gray-900">{selected.size}</span> pedido{selected.size !== 1 ? 's' : ''} seleccionado{selected.size !== 1 ? 's' : ''}
+                <span className="font-bold text-gray-900">{selected.size}</span> pedido
+                {selected.size !== 1 ? 's' : ''} seleccionado
+                {selected.size !== 1 ? 's' : ''}
               </div>
               <div className="text-sm font-bold" style={{ color: '#10b981' }}>
                 {formatCurrency(totalValue)}
               </div>
             </div>
-            <div className="flex gap-2">
+
+            {/* Toggle tabs */}
+            <div className="flex rounded-xl overflow-hidden border border-purple-300">
               <button
-                onClick={() => setShowRoute(true)}
-                className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-purple-300 px-4 py-2.5 text-sm font-semibold"
-                style={{ color: '#7c3aed' }}
+                onClick={() => setActiveView('ruta')}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors',
+                  activeView === 'ruta'
+                    ? 'text-white'
+                    : 'text-purple-700 hover:bg-purple-50'
+                )}
+                style={activeView === 'ruta' ? { background: '#7c3aed' } : {}}
               >
                 <Navigation className="h-4 w-4" />
-                Sugerir Ruta
+                Ruta
               </button>
               <button
-                onClick={() => setShowPrint(true)}
-                className="flex-1 flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white"
-                style={{ background: '#7c3aed' }}
+                onClick={() => setActiveView('guias')}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors border-l border-purple-300',
+                  activeView === 'guias'
+                    ? 'text-white'
+                    : 'text-purple-700 hover:bg-purple-50'
+                )}
+                style={activeView === 'guias' ? { background: '#7c3aed' } : {}}
               >
                 <Printer className="h-4 w-4" />
-                Generar Guías
+                Guías
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {showPrint && (
-        <PrintView orders={selectedOrders} onClose={() => setShowPrint(false)} />
+      {activeView === 'guias' && (
+        <PrintView orders={selectedOrders} onClose={() => setActiveView(null)} />
       )}
-      {showRoute && (
-        <RouteView orders={selectedOrders} onClose={() => setShowRoute(false)} />
+      {activeView === 'ruta' && (
+        <RouteView orders={selectedOrders} date={date} onClose={() => setActiveView(null)} />
       )}
     </div>
   )

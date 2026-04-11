@@ -11,7 +11,7 @@ import AIOrderInput from '@/components/orders/AIOrderInput'
 
 type DeliveryType = 'Bogo' | 'Bodega' | 'Otros' | ''
 type DeliveryStatus = 'Confirmado' | 'Entregado' | 'Devolucion' | 'Cancelado'
-type Vendor = 'Ginna' | 'Diana' | 'Chiquis' | ''
+type Vendor = 'Paola'
 
 interface OrderForm {
   client_name: string
@@ -47,7 +47,7 @@ const EMPTY_FORM: OrderForm = {
   payment_cash: '',
   payment_transfer: '',
   delivery_type: '',
-  vendor: '',
+  vendor: 'Paola',
   delivery_status: 'Confirmado',
   order_date: '',
   is_exchange: false,
@@ -191,7 +191,7 @@ export default function NewOrderPage({
         payment_transfer: parseFloat(form.payment_transfer) || 0,
         product_cost,
         delivery_type: form.delivery_type || '',
-        vendor: form.vendor || '',
+        vendor: 'Paola',
         delivery_status: form.delivery_status,
         is_exchange: form.is_exchange,
         order_date: form.order_date,
@@ -471,19 +471,6 @@ export default function NewOrderPage({
                   <option value="Bogo">Bogo</option>
                   <option value="Bodega">Bodega</option>
                   <option value="Otros">Otros</option>
-                </select>
-              </Field>
-              <Field label="Vendedora">
-                <select
-                  className={selectCls}
-                  value={form.vendor}
-                  onChange={(e) => setField('vendor', e.target.value as Vendor)}
-                  disabled={saving}
-                >
-                  <option value="">— Seleccionar —</option>
-                  <option value="Ginna">Ginna</option>
-                  <option value="Diana">Diana</option>
-                  <option value="Chiquis">Chiquis</option>
                 </select>
               </Field>
               <Field label="Estado">

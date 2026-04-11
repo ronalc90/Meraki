@@ -11,11 +11,13 @@ import {
   X,
   Edit2,
   Trash2,
+  Download,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import type { InventoryItem } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { downloadExcel } from '@/lib/export'
 
 const CATEGORIES = ['Pantuflas', 'Maxisacos', 'Accesorios', 'Otro']
 const COLORS = ['Negro', 'Blanco', 'Gris', 'Beige', 'Rosado', 'Azul', 'Verde', 'Rojo', 'Morado', 'Multicolor']
@@ -347,14 +349,29 @@ export default function InventoryPage() {
               <h1 className="text-xl font-bold text-gray-900">Inventario</h1>
               <p className="text-xs text-gray-500">Tu Tienda Meraki</p>
             </div>
-            <button
-              onClick={() => { setEditItem(null); setModalOpen(true) }}
-              className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm"
-              style={{ background: '#7c3aed' }}
-            >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Agregar</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={async () => {
+                  try {
+                    await downloadExcel('inventory')
+                  } catch {
+                    toast.error('Error al exportar')
+                  }
+                }}
+                className="flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-colors"
+              >
+                <Download className="h-4 w-4" />
+                <span className="hidden sm:inline">Exportar</span>
+              </button>
+              <button
+                onClick={() => { setEditItem(null); setModalOpen(true) }}
+                className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm"
+                style={{ background: '#7c3aed' }}
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Agregar</span>
+              </button>
+            </div>
           </div>
 
           {/* View toggle */}
