@@ -1,0 +1,407 @@
+'use client'
+
+import { useEffect, useState, useCallback, useRef } from 'react'
+import {
+  Printer,
+  MapPin,
+  CheckSquare,
+  Square,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Truck,
+  Navigation,
+} from 'lucide-react'
+import toast from 'react-hot-toast'
+import { supabase } from '@/lib/supabase'
+import type { Order } from '@/lib/types'
+import { cn, formatCurrency } from '@/lib/utils'
+
+function todayISO(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+interface RouteGroup {
+  zone: string
+  orders: Order[]
+  expanded: boolean
+}
+
+function PrintView({ orders, onClose }: { orders: Order[]; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
+      {/* Screen-only toolbar */}
+      <div className="print:hidden sticky top-0 flex items-center justify-between gap-3 bg-white border-b border-gray-200 px-6 py-3 shadow-sm">
+        <span className="font-semibold text-gray-700">
+          Vista de impresión — {orders.length} guías
+        </span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white"
+            style={{ background: '#7c3aed' }}
+          >
+            <Printer className="h-4 w-4" />
+            Imprimir
+          </button>
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-gray-200 p-2 hover:bg-gray-50"
+          >
+            <X className="h-5 w-5 text-gray-500" />
+          </button>
+        </div>
+      </div>
+
+      {/* Cards */}
+      <div className="p-6 print:p-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-4 print:gap-0">
+          {orders.map((order, idx) => (
+            <div
+              key={order.id}
+              className={cn(
+                'border-2 border-dashed border-gray-400 rounded-lg p-4 print:rounded-none print:border print:border-dashed print:border-gray-600 print:break-inside-avoid',
+                idx < orders.length - 1 ? 'print:mb-2' : ''
+              )}
+            >
+              {/* Card header */}
+              <div className="text-center mb-3 pb-2 border-b border-gray-300">
+                <p className="font-black text-lg tracking-tight text-gray-900">Tu Tienda Meraki</p>
+              </div>
+
+              <dl className="space-y-1.5 text-sm">
+                <div className="flex gap-2">
+                  <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">ID Pedido</dt>
+                  <dd className="font-bold text-gray-900">{order.order_code}</dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">Cliente</dt>
+                  <dd className="font-medium text-gray-800">{order.client_name}</dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">Celular</dt>
+                  <dd className="text-gray-800">{order.phone}</dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">Dirección</dt>
+                  <dd className="text-gray-800">{order.address}</dd>
+                </div>
+                {order.complement && (
+                  <div className="flex gap-2">
+                    <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">Complemento</dt>
+                    <dd className="text-gray-800">{order.complement}</dd>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">Referencia</dt>
+                  <dd className="text-gray-800">{order.product_ref}</dd>
+                </div>
+                {order.detail && (
+                  <div className="flex gap-2">
+                    <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">Detalle</dt>
+                    <dd className="text-gray-800">{order.detail}</dd>
+                  </div>
+                )}
+                <div className="flex gap-2 pt-1 border-t border-gray-200">
+                  <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">Valor a cobrar</dt>
+                  <dd className="text-xl font-black text-gray-900">{formatCurrency(order.value_to_collect)}</dd>
+                </div>
+                {order.comment && (
+                  <div className="flex gap-2">
+                    <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">Comentario</dt>
+                    <dd className="text-gray-700 italic">{order.comment}</dd>
+                  </div>
+                )}
+              </dl>
+
+              {/* Card footer */}
+              <div className="mt-3 pt-2 border-t border-gray-300 text-center">
+                <p className="text-xs text-gray-500">Mayor Información 3203880422</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RouteView({ orders, onClose }: { orders: Order[]; onClose: () => void }) {
+  const groups = orders.reduce<Record<string, Order[]>>((acc, order) => {
+    const zone = (order.complement?.trim() || 'Sin barrio').split(/[,;]/)[0].trim()
+    if (!acc[zone]) acc[zone] = []
+    acc[zone].push(order)
+    return acc
+  }, {})
+
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(
+    Object.keys(groups).reduce((a, k) => ({ ...a, [k]: true }), {})
+  )
+
+  const sorted = Object.entries(groups).sort((a, b) => b[1].length - a[1].length)
+
+  return (
+    <div className="fixed inset-0 z-50 bg-gray-50 overflow-y-auto">
+      <div className="sticky top-0 flex items-center justify-between gap-3 bg-white border-b border-gray-200 px-4 py-3 shadow-sm">
+        <div>
+          <h2 className="font-bold text-gray-900">Ruta sugerida</h2>
+          <p className="text-xs text-gray-500">{sorted.length} zonas — {orders.length} pedidos</p>
+        </div>
+        <button onClick={onClose} className="rounded-xl border border-gray-200 p-2 hover:bg-gray-50">
+          <X className="h-5 w-5 text-gray-500" />
+        </button>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-4 py-4 space-y-3">
+        {sorted.map(([zone, zoneOrders], idx) => (
+          <div key={zone} className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
+            <button
+              onClick={() => setExpanded((prev) => ({ ...prev, [zone]: !prev[zone] }))}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50"
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white text-xs font-bold"
+                  style={{ background: '#7c3aed' }}
+                >
+                  {idx + 1}
+                </div>
+                <div className="text-left">
+                  <p className="font-semibold text-gray-900 flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5 text-purple-500" />
+                    {zone}
+                  </p>
+                  <p className="text-xs text-gray-500">{zoneOrders.length} pedido{zoneOrders.length !== 1 ? 's' : ''}</p>
+                </div>
+              </div>
+              {expanded[zone]
+                ? <ChevronUp className="h-4 w-4 text-gray-400" />
+                : <ChevronDown className="h-4 w-4 text-gray-400" />
+              }
+            </button>
+
+            {expanded[zone] && (
+              <div className="border-t border-gray-100 divide-y divide-gray-50">
+                {zoneOrders.map((order) => (
+                  <div key={order.id} className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900 text-sm">{order.client_name}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{order.address}</p>
+                        <p className="text-xs text-gray-400">{order.phone} · {order.product_ref}</p>
+                      </div>
+                      <span className="shrink-0 font-bold text-sm" style={{ color: '#7c3aed' }}>
+                        {formatCurrency(order.value_to_collect)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export default function DispatchPage() {
+  const [date, setDate] = useState(todayISO())
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(false)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [showPrint, setShowPrint] = useState(false)
+  const [showRoute, setShowRoute] = useState(false)
+
+  const loadOrders = useCallback(async (d: string) => {
+    setLoading(true)
+    setSelected(new Set())
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('order_date', d)
+        .eq('delivery_status', 'Confirmado')
+        .order('id', { ascending: true })
+      if (error) throw error
+      setOrders(data ?? [])
+    } catch (err) {
+      console.error(err)
+      toast.error('Error al cargar los pedidos')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadOrders(date)
+  }, [date, loadOrders])
+
+  const allSelected = orders.length > 0 && selected.size === orders.length
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(orders.map((o) => o.id)))
+    }
+  }
+
+  function toggleOne(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const selectedOrders = orders.filter((o) => selected.has(o.id))
+  const totalValue = selectedOrders.reduce((sum, o) => sum + o.value_to_collect, 0)
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-24">
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-4 shadow-sm">
+        <div className="mx-auto max-w-3xl">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Despacho</h1>
+              <p className="text-xs text-gray-500">Pedidos confirmados para despachar</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Truck className="h-4 w-4 text-gray-400" />
+              <input
+                type="date"
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-3xl px-4 py-4 space-y-3">
+        {loading ? (
+          <div className="flex h-48 items-center justify-center">
+            <div
+              className="h-8 w-8 animate-spin rounded-full border-2"
+              style={{ borderColor: '#7c3aed', borderTopColor: 'transparent' }}
+            />
+          </div>
+        ) : orders.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-48 text-gray-400">
+            <Truck className="h-10 w-10 mb-2" />
+            <p className="text-sm">No hay pedidos confirmados para esta fecha</p>
+          </div>
+        ) : (
+          <>
+            {/* Select all */}
+            <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm border border-gray-100">
+              <button onClick={toggleAll} className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                {allSelected
+                  ? <CheckSquare className="h-5 w-5" style={{ color: '#7c3aed' }} />
+                  : <Square className="h-5 w-5 text-gray-400" />
+                }
+                Seleccionar todos ({orders.length})
+              </button>
+            </div>
+
+            {/* Order cards */}
+            {orders.map((order) => {
+              const isSelected = selected.has(order.id)
+              return (
+                <button
+                  key={order.id}
+                  onClick={() => toggleOne(order.id)}
+                  className={cn(
+                    'w-full text-left rounded-2xl border-2 bg-white p-4 shadow-sm transition-all',
+                    isSelected ? 'border-purple-400 bg-purple-50' : 'border-gray-100 hover:border-gray-300'
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 shrink-0">
+                      {isSelected
+                        ? <CheckSquare className="h-5 w-5" style={{ color: '#7c3aed' }} />
+                        : <Square className="h-5 w-5 text-gray-300" />
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <p className="font-bold text-gray-900">{order.client_name}</p>
+                        <span className="font-black text-lg" style={{ color: '#7c3aed' }}>
+                          {formatCurrency(order.value_to_collect)}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600 mt-0.5">{order.address}</p>
+                      {order.complement && (
+                        <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                          <MapPin className="h-3 w-3" />
+                          {order.complement}
+                        </p>
+                      )}
+                      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-400">
+                        <span>#{order.order_code}</span>
+                        <span>{order.phone}</span>
+                        {order.product_ref && <span>{order.product_ref}</span>}
+                        {order.detail && <span className="text-gray-500">{order.detail}</span>}
+                      </div>
+                      {order.comment && (
+                        <p className="mt-1 text-xs text-amber-600 italic">{order.comment}</p>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </>
+        )}
+      </div>
+
+      {/* Bottom action bar */}
+      {selected.size > 0 && (
+        <div className="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 shadow-lg px-4 py-3 z-10">
+          <div className="mx-auto max-w-3xl">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="text-sm text-gray-600">
+                <span className="font-bold text-gray-900">{selected.size}</span> pedido{selected.size !== 1 ? 's' : ''} seleccionado{selected.size !== 1 ? 's' : ''}
+              </div>
+              <div className="text-sm font-bold" style={{ color: '#10b981' }}>
+                {formatCurrency(totalValue)}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowRoute(true)}
+                className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-purple-300 px-4 py-2.5 text-sm font-semibold"
+                style={{ color: '#7c3aed' }}
+              >
+                <Navigation className="h-4 w-4" />
+                Sugerir Ruta
+              </button>
+              <button
+                onClick={() => setShowPrint(true)}
+                className="flex-1 flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white"
+                style={{ background: '#7c3aed' }}
+              >
+                <Printer className="h-4 w-4" />
+                Generar Guías
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPrint && (
+        <PrintView orders={selectedOrders} onClose={() => setShowPrint(false)} />
+      )}
+      {showRoute && (
+        <RouteView orders={selectedOrders} onClose={() => setShowRoute(false)} />
+      )}
+    </div>
+  )
+}

@@ -1,0 +1,543 @@
+'use client'
+
+import { use, useEffect, useState, useCallback } from 'react'
+import { Plus, Search, Pencil, Trash2, X, Check, AlertTriangle, PackageSearch } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { supabase } from '@/lib/supabase'
+import type { Product } from '@/lib/types'
+import { cn, formatCurrency } from '@/lib/utils'
+
+const CATEGORIES = ['Pantuflas', 'Maxisaco', 'Pocillo', 'Bolso', 'Otro'] as const
+type Category = (typeof CATEGORIES)[number]
+
+const EMPTY_FORM = {
+  code: '',
+  name: '',
+  cost: '',
+  category: 'Pantuflas' as Category,
+  active: true,
+}
+
+function SupabaseBanner() {
+  return (
+    <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+      <span>
+        Supabase no está configurado. Los datos mostrados son de ejemplo. Configura{' '}
+        <code className="rounded bg-amber-100 px-1">NEXT_PUBLIC_SUPABASE_URL</code> y{' '}
+        <code className="rounded bg-amber-100 px-1">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> para
+        activar la base de datos.
+      </span>
+    </div>
+  )
+}
+
+interface ModalProps {
+  open: boolean
+  title: string
+  onClose: () => void
+  children: React.ReactNode
+}
+
+function Modal({ open, title, onClose, children }: ModalProps) {
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden
+      />
+      <div className="relative w-full max-w-md rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <h2 className="text-base font-bold text-gray-800">{title}</h2>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="px-6 py-5">{children}</div>
+      </div>
+    </div>
+  )
+}
+
+function CategoryBadge({ category }: { category: string }) {
+  const colors: Record<string, string> = {
+    Pantuflas: 'bg-purple-100 text-purple-700',
+    Maxisaco: 'bg-blue-100 text-blue-700',
+    Pocillo: 'bg-orange-100 text-orange-700',
+    Bolso: 'bg-pink-100 text-pink-700',
+    Otro: 'bg-gray-100 text-gray-600',
+  }
+  return (
+    <span
+      className={cn(
+        'inline-block rounded-full px-2.5 py-0.5 text-xs font-medium',
+        colors[category] ?? 'bg-gray-100 text-gray-600',
+      )}
+    >
+      {category}
+    </span>
+  )
+}
+
+export default function ProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
+  // searchParams not used but accepted per Next.js 16 convention
+  void use(searchParams)
+
+  const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
+  const [supabaseOk, setSupabaseOk] = useState(true)
+
+  const [search, setSearch] = useState('')
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const [form, setForm] = useState({ ...EMPTY_FORM })
+
+  const fetchProducts = useCallback(async () => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setProducts(data ?? [])
+      setSupabaseOk(true)
+    } catch {
+      setProducts([])
+      setSupabaseOk(false)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchProducts()
+  }, [fetchProducts])
+
+  const filtered = products.filter(
+    (p) =>
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.code.toLowerCase().includes(search.toLowerCase()) ||
+      p.category.toLowerCase().includes(search.toLowerCase()),
+  )
+
+  function openAdd() {
+    setEditingProduct(null)
+    setForm({ ...EMPTY_FORM })
+    setModalOpen(true)
+  }
+
+  function openEdit(product: Product) {
+    setEditingProduct(product)
+    setForm({
+      code: product.code,
+      name: product.name,
+      cost: String(product.cost),
+      category: product.category as Category,
+      active: product.active,
+    })
+    setModalOpen(true)
+  }
+
+  function closeModal() {
+    setModalOpen(false)
+    setEditingProduct(null)
+    setForm({ ...EMPTY_FORM })
+  }
+
+  async function handleSave() {
+    if (!form.code.trim() || !form.name.trim() || !form.cost) {
+      toast.error('Completa todos los campos requeridos')
+      return
+    }
+    const cost = parseFloat(form.cost)
+    if (isNaN(cost) || cost < 0) {
+      toast.error('El costo debe ser un número válido')
+      return
+    }
+    setSaving(true)
+    try {
+      const payload = {
+        code: form.code.trim().toUpperCase(),
+        name: form.name.trim(),
+        cost,
+        category: form.category,
+        active: form.active,
+      }
+      if (editingProduct) {
+        const { error } = await supabase
+          .from('products')
+          .update(payload)
+          .eq('id', editingProduct.id)
+        if (error) throw error
+        toast.success('Producto actualizado')
+      } else {
+        const { error } = await supabase.from('products').insert(payload)
+        if (error) throw error
+        toast.success('Producto creado')
+      }
+      closeModal()
+      await fetchProducts()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al guardar'
+      toast.error(msg)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      const { error } = await supabase.from('products').delete().eq('id', deleteTarget.id)
+      if (error) throw error
+      toast.success('Producto eliminado')
+      setDeleteTarget(null)
+      await fetchProducts()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al eliminar'
+      toast.error(msg)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Catalogo de Productos</h1>
+          <p className="mt-0.5 text-sm text-gray-500">
+            {products.length} producto{products.length !== 1 ? 's' : ''} registrado
+            {products.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <button
+          onClick={openAdd}
+          className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 active:translate-y-0"
+          style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #9061f9 100%)' }}
+        >
+          <Plus className="h-4 w-4" />
+          Nuevo Producto
+        </button>
+      </div>
+
+      {!supabaseOk && <SupabaseBanner />}
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Buscar por nombre, código o categoría..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-800 outline-none transition-all focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
+      {/* Loading */}
+      {loading ? (
+        <div className="flex h-48 items-center justify-center">
+          <div
+            className="h-8 w-8 animate-spin rounded-full border-2 border-t-transparent"
+            style={{ borderColor: '#7c3aed', borderTopColor: 'transparent' }}
+          />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-gray-200 bg-white py-16 text-center">
+          <PackageSearch className="h-10 w-10 text-gray-300" />
+          <p className="text-sm text-gray-500">
+            {search ? 'No se encontraron productos con ese criterio' : 'No hay productos aún'}
+          </p>
+          {!search && (
+            <button
+              onClick={openAdd}
+              className="mt-1 text-sm font-medium text-purple-600 hover:text-purple-700"
+            >
+              Agregar el primero
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Desktop table */}
+          <div className="hidden overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm md:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50 text-left">
+                  <th className="px-5 py-3.5 font-semibold text-gray-600">Código</th>
+                  <th className="px-5 py-3.5 font-semibold text-gray-600">Nombre</th>
+                  <th className="px-5 py-3.5 font-semibold text-gray-600">Costo</th>
+                  <th className="px-5 py-3.5 font-semibold text-gray-600">Categoría</th>
+                  <th className="px-5 py-3.5 font-semibold text-gray-600">Estado</th>
+                  <th className="px-5 py-3.5 font-semibold text-gray-600">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filtered.map((product) => (
+                  <tr key={product.id} className="hover:bg-gray-50/60 transition-colors">
+                    <td className="px-5 py-4 font-mono text-xs font-medium text-purple-700">
+                      {product.code}
+                    </td>
+                    <td className="px-5 py-4 font-medium text-gray-800">{product.name}</td>
+                    <td className="px-5 py-4 text-gray-700">{formatCurrency(product.cost)}</td>
+                    <td className="px-5 py-4">
+                      <CategoryBadge category={product.category} />
+                    </td>
+                    <td className="px-5 py-4">
+                      {product.active ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+                          <Check className="h-3 w-3" />
+                          Activo
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500">
+                          <X className="h-3 w-3" />
+                          Inactivo
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openEdit(product)}
+                          className="rounded-lg p-1.5 text-gray-400 hover:bg-purple-50 hover:text-purple-600 transition-colors"
+                          title="Editar"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(product)}
+                          className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="grid gap-3 md:hidden">
+            {filtered.map((product) => (
+              <div
+                key={product.id}
+                className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold text-purple-600">
+                        {product.code}
+                      </span>
+                      <CategoryBadge category={product.category} />
+                    </div>
+                    <p className="mt-1 truncate font-semibold text-gray-800">{product.name}</p>
+                    <p className="mt-0.5 text-sm font-medium text-gray-600">
+                      {formatCurrency(product.cost)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    {product.active ? (
+                      <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                        Activo
+                      </span>
+                    ) : (
+                      <span className="inline-block rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+                        Inactivo
+                      </span>
+                    )}
+                    <button
+                      onClick={() => openEdit(product)}
+                      className="rounded-lg p-2 text-gray-400 hover:bg-purple-50 hover:text-purple-600 transition-colors"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget(product)}
+                      className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Add / Edit Modal */}
+      <Modal
+        open={modalOpen}
+        title={editingProduct ? 'Editar Producto' : 'Nuevo Producto'}
+        onClose={closeModal}
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-gray-600">
+                Código <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.code}
+                onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+                placeholder="REF-001"
+                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-gray-600">
+                Categoría <span className="text-red-400">*</span>
+              </label>
+              <select
+                value={form.category}
+                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value as Category }))}
+                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="block text-xs font-semibold text-gray-600">
+              Nombre <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="Pantufla acolchada talla M"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="block text-xs font-semibold text-gray-600">
+              Costo (COP) <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="100"
+              value={form.cost}
+              onChange={(e) => setForm((f) => ({ ...f, cost: e.target.value }))}
+              placeholder="25000"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+            />
+          </div>
+
+          {/* Active toggle */}
+          <label className="flex cursor-pointer items-center gap-3">
+            <div className="relative">
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={form.active}
+                onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
+              />
+              <div
+                className="h-6 w-10 rounded-full transition-colors duration-200"
+                style={{ background: form.active ? '#7c3aed' : '#e2e8f0' }}
+              />
+              <div
+                className="absolute top-1 left-1 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200"
+                style={{ transform: form.active ? 'translateX(16px)' : 'translateX(0)' }}
+              />
+            </div>
+            <span className="text-sm font-medium text-gray-700">Producto activo</span>
+          </label>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={closeModal}
+              className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white transition-all disabled:opacity-70"
+              style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #9061f9 100%)' }}
+            >
+              {saving ? 'Guardando...' : editingProduct ? 'Actualizar' : 'Crear Producto'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete confirmation Modal */}
+      <Modal
+        open={!!deleteTarget}
+        title="Eliminar Producto"
+        onClose={() => setDeleteTarget(null)}
+      >
+        <div className="space-y-5">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-100">
+              <Trash2 className="h-6 w-6 text-red-500" />
+            </div>
+            <div>
+              <p className="font-semibold text-gray-800">{deleteTarget?.name}</p>
+              <p className="text-sm text-gray-500">
+                Esta accion no se puede deshacer. El producto sera eliminado permanentemente.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setDeleteTarget(null)}
+              className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white transition-all disabled:opacity-70"
+              style={{ background: '#ef4444' }}
+            >
+              {deleting ? 'Eliminando...' : 'Sí, eliminar'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  )
+}
