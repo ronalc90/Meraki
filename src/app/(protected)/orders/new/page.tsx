@@ -9,6 +9,7 @@ import type { Product, ParsedOrder } from '@/lib/types'
 import { generateOrderCode } from '@/lib/utils'
 import AIOrderInput from '@/components/orders/AIOrderInput'
 import { useUser } from '@/lib/UserContext'
+import { isOwnerSupported } from '@/lib/db'
 
 type DeliveryType = 'Bogo' | 'Bodega' | 'Otros' | ''
 type DeliveryStatus = 'Confirmado' | 'Entregado' | 'Devolucion' | 'Cancelado'
@@ -126,12 +127,11 @@ export default function NewOrderPage({
   useEffect(() => {
     async function loadProducts() {
       try {
-        const { data, error } = await supabase
-          .from('products')
-          .select('*')
-          .eq('owner', owner)
-          .eq('active', true)
-          .order('name')
+        const hasOwner = await isOwnerSupported()
+        let query = supabase.from('products').select('*')
+        if (hasOwner) query = query.eq('owner', owner)
+        query = query.eq('active', true).order('name')
+        const { data, error } = await query
 
         if (error) throw error
         setProducts(data ?? [])
@@ -178,7 +178,8 @@ export default function NewOrderPage({
       const orderDate = new Date(form.order_date + 'T00:00:00')
       const order_code = generateOrderCode(orderDate, sequence)
 
-      const payload = {
+      const hasOwner = await isOwnerSupported()
+      const payload: Record<string, unknown> = {
         order_code,
         client_name: form.client_name.trim(),
         phone: form.phone.trim(),
@@ -203,8 +204,8 @@ export default function NewOrderPage({
         dispatch_date: null,
         guide_number: '',
         prepaid_amount: 0,
-        owner,
       }
+      if (hasOwner) payload.owner = owner
 
       const { error } = await supabase.from('orders').insert(payload)
       if (error) throw error

@@ -84,15 +84,21 @@ export default function AIOrderInput({ onOrderConfirmed }: AIOrderInputProps) {
     const recognition = new SpeechRecognitionAPI();
     recognition.lang = 'es-CO';
     recognition.interimResults = true;
-    recognition.continuous = true;
+    recognition.continuous = false;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
-      let transcript = '';
+      let finalTranscript = '';
+      let interimTranscript = '';
       for (let i = 0; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript;
+        const result = event.results[i];
+        if (result.isFinal) {
+          finalTranscript += result[0].transcript;
+        } else {
+          interimTranscript = result[0].transcript;
+        }
       }
-      setInput(transcript);
+      setInput(finalTranscript || interimTranscript);
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

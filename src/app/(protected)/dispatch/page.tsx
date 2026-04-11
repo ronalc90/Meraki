@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase'
 import type { Order } from '@/lib/types'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useUser } from '@/lib/UserContext'
+import { isOwnerSupported } from '@/lib/db'
 
 function todayISO(): string {
   const d = new Date()
@@ -423,13 +424,11 @@ export default function DispatchPage() {
     setLoading(true)
     setSelected(new Set())
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('owner', owner)
-        .eq('order_date', d)
-        .eq('delivery_status', 'Confirmado')
-        .order('id', { ascending: true })
+      const hasOwner = await isOwnerSupported()
+      let query = supabase.from('orders').select('*')
+      if (hasOwner) query = query.eq('owner', owner)
+      query = query.eq('order_date', d).eq('delivery_status', 'Confirmado').order('id', { ascending: true })
+      const { data, error } = await query
       if (error) throw error
       setOrders(data ?? [])
     } catch (err) {

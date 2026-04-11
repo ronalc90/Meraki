@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase'
 import type { Order } from '@/lib/types'
 import { cn, formatCurrency, getMonthDays } from '@/lib/utils'
 import { useUser } from '@/lib/UserContext'
+import { isOwnerSupported } from '@/lib/db'
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -97,12 +98,11 @@ export default function OrdersPage({
       const lastDay = new Date(year, month, 0).getDate()
       const to = `${year}-${padDate(month)}-${padDate(lastDay)}`
 
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('owner', owner)
-        .gte('order_date', from)
-        .lte('order_date', to)
+      const hasOwner = await isOwnerSupported()
+      let query = supabase.from('orders').select('*')
+      if (hasOwner) query = query.eq('owner', owner)
+      query = query.gte('order_date', from).lte('order_date', to)
+      const { data, error } = await query
 
       if (error) throw error
       setOrders(data ?? [])

@@ -32,6 +32,7 @@ import type { Order } from '@/lib/types'
 import { cn, formatCurrency } from '@/lib/utils'
 import { downloadExcel } from '@/lib/export'
 import { useUser } from '@/lib/UserContext'
+import { isOwnerSupported } from '@/lib/db'
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -138,13 +139,11 @@ export default function DashboardPage() {
       const from = `${y}-${String(m).padStart(2, '0')}-01`
       const daysInMonth = new Date(y, m, 0).getDate()
       const to = `${y}-${String(m).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('owner', owner)
-        .gte('order_date', from)
-        .lte('order_date', to)
-        .order('order_date', { ascending: false })
+      const hasOwner = await isOwnerSupported()
+      let query = supabase.from('orders').select('*')
+      if (hasOwner) query = query.eq('owner', owner)
+      query = query.gte('order_date', from).lte('order_date', to).order('order_date', { ascending: false })
+      const { data, error } = await query
       if (error) throw error
       setOrders(data ?? [])
     } catch (err) {

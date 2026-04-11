@@ -22,6 +22,7 @@ import { supabase } from '@/lib/supabase'
 import type { Order, DailyKPIs } from '@/lib/types'
 import { cn, formatCurrency, getDayOfWeek } from '@/lib/utils'
 import { useUser } from '@/lib/UserContext'
+import { isOwnerSupported } from '@/lib/db'
 
 const DELIVERY_STATUS_OPTIONS = ['Confirmado', 'Entregado', 'Devolucion', 'Cancelado'] as const
 const DELIVERY_TYPE_OPTIONS = ['Bogo', 'Bodega', 'Otros', ''] as const
@@ -316,12 +317,11 @@ export default function DailyOrdersPage({
   const fetchOrders = useCallback(async () => {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('owner', owner)
-        .eq('order_date', date)
-        .order('created_at', { ascending: true })
+      const hasOwner = await isOwnerSupported()
+      let query = supabase.from('orders').select('*')
+      if (hasOwner) query = query.eq('owner', owner)
+      query = query.eq('order_date', date).order('created_at', { ascending: true })
+      const { data, error } = await query
 
       if (error) throw error
       setOrders(data ?? [])

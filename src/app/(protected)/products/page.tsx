@@ -9,6 +9,7 @@ import { cn, formatCurrency } from '@/lib/utils'
 import { downloadExcel } from '@/lib/export'
 import ProductPhotoAI from '@/components/products/ProductPhotoAI'
 import { useUser } from '@/lib/UserContext'
+import { isOwnerSupported } from '@/lib/db'
 
 const CATEGORIES = ['Pantuflas', 'Maxisaco', 'Pocillo', 'Bolso', 'Otro'] as const
 type Category = (typeof CATEGORIES)[number]
@@ -113,11 +114,11 @@ export default function ProductsPage({
   const fetchProducts = useCallback(async () => {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('owner', owner)
-        .order('created_at', { ascending: false })
+      const hasOwner = await isOwnerSupported()
+      let query = supabase.from('products').select('*')
+      if (hasOwner) query = query.eq('owner', owner)
+      query = query.order('created_at', { ascending: false })
+      const { data, error } = await query
 
       if (error) throw error
       setProducts(data ?? [])
@@ -177,14 +178,15 @@ export default function ProductsPage({
     }
     setSaving(true)
     try {
-      const payload = {
+      const hasOwner = await isOwnerSupported()
+      const payload: Record<string, unknown> = {
         code: form.code.trim().toUpperCase(),
         name: form.name.trim(),
         cost,
         category: form.category,
         active: form.active,
-        owner,
       }
+      if (hasOwner) payload.owner = owner
       if (editingProduct) {
         const { error } = await supabase
           .from('products')

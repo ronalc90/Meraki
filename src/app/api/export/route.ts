@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ExcelJS from 'exceljs'
 import { getServiceClient } from '@/lib/supabase'
+import { isOwnerSupported } from '@/lib/db'
 
 const HEADER_FILL: ExcelJS.Fill = {
   type: 'pattern',
@@ -57,6 +58,7 @@ export async function GET(request: NextRequest) {
   const workbook = new ExcelJS.Workbook()
   workbook.creator = 'Meraki'
   workbook.created = new Date()
+  const hasOwner = await isOwnerSupported()
 
   try {
     if (type === 'dashboard') {
@@ -69,13 +71,10 @@ export async function GET(request: NextRequest) {
       const daysInMonth = new Date(y, m, 0).getDate()
       const to = `${y}-${String(m).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
-      const { data: orders, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('owner', owner)
-        .gte('order_date', from)
-        .lte('order_date', to)
-        .order('order_date', { ascending: true })
+      let ordersQuery = supabase.from('orders').select('*')
+      if (hasOwner) ordersQuery = ordersQuery.eq('owner', owner)
+      ordersQuery = ordersQuery.gte('order_date', from).lte('order_date', to).order('order_date', { ascending: true })
+      const { data: orders, error } = await ordersQuery
 
       if (error) throw error
 
@@ -176,12 +175,10 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Se requiere date' }, { status: 400 })
       }
 
-      const { data: orders, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('owner', owner)
-        .eq('order_date', date)
-        .order('created_at', { ascending: true })
+      let ordersQuery = supabase.from('orders').select('*')
+      if (hasOwner) ordersQuery = ordersQuery.eq('owner', owner)
+      ordersQuery = ordersQuery.eq('order_date', date).order('created_at', { ascending: true })
+      const { data: orders, error } = await ordersQuery
 
       if (error) throw error
 
@@ -215,11 +212,10 @@ export async function GET(request: NextRequest) {
       })
       autoWidth(sheet)
     } else if (type === 'inventory') {
-      const { data: items, error } = await supabase
-        .from('inventory')
-        .select('*')
-        .eq('owner', owner)
-        .order('created_at', { ascending: true })
+      let inventoryQuery = supabase.from('inventory').select('*')
+      if (hasOwner) inventoryQuery = inventoryQuery.eq('owner', owner)
+      inventoryQuery = inventoryQuery.order('created_at', { ascending: true })
+      const { data: items, error } = await inventoryQuery
 
       if (error) throw error
 
@@ -253,11 +249,10 @@ export async function GET(request: NextRequest) {
       })
       autoWidth(sheet)
     } else if (type === 'products') {
-      const { data: products, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('owner', owner)
-        .order('created_at', { ascending: true })
+      let productsQuery = supabase.from('products').select('*')
+      if (hasOwner) productsQuery = productsQuery.eq('owner', owner)
+      productsQuery = productsQuery.order('created_at', { ascending: true })
+      const { data: products, error } = await productsQuery
 
       if (error) throw error
 

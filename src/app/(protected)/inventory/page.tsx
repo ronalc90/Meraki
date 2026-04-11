@@ -19,6 +19,7 @@ import type { InventoryItem } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { downloadExcel } from '@/lib/export'
 import { useUser } from '@/lib/UserContext'
+import { isOwnerSupported } from '@/lib/db'
 
 const CATEGORIES = ['Pantuflas', 'Maxisacos', 'Accesorios', 'Otro']
 const COLORS = ['Negro', 'Blanco', 'Gris', 'Beige', 'Rosado', 'Azul', 'Verde', 'Rojo', 'Morado', 'Multicolor']
@@ -259,11 +260,11 @@ export default function InventoryPage() {
   const loadItems = useCallback(async () => {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('inventory')
-        .select('*')
-        .eq('owner', owner)
-        .order('created_at', { ascending: false })
+      const hasOwner = await isOwnerSupported()
+      let query = supabase.from('inventory').select('*')
+      if (hasOwner) query = query.eq('owner', owner)
+      query = query.order('created_at', { ascending: false })
+      const { data, error } = await query
       if (error) throw error
       setItems(data ?? [])
     } catch (err) {
@@ -307,6 +308,7 @@ export default function InventoryPage() {
   async function handleSave(data: Partial<InventoryItem>) {
     setSaving(true)
     try {
+      const hasOwner = await isOwnerSupported()
       if (data.id) {
         const { id, created_at: _ca, ...rest } = data as InventoryItem
         const { error } = await supabase.from('inventory').update(rest).eq('id', id)
@@ -314,7 +316,9 @@ export default function InventoryPage() {
         toast.success('Producto actualizado')
       } else {
         const { id: _id, created_at: _ca, ...rest } = data as InventoryItem
-        const { error } = await supabase.from('inventory').insert({ ...rest, owner })
+        const insertPayload: Record<string, unknown> = { ...rest }
+        if (hasOwner) insertPayload.owner = owner
+        const { error } = await supabase.from('inventory').insert(insertPayload)
         if (error) throw error
         toast.success('Producto agregado')
       }

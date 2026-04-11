@@ -25,7 +25,7 @@ export default function MobileNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden">
       {/* Safe area background */}
       <div className="bg-white/95 backdrop-blur-md border-t border-gray-100 shadow-[0_-1px_0_0_rgba(0,0,0,0.06)]">
-        <div className="flex items-end justify-around px-2 pt-2 pb-safe-or-2">
+        <div className="flex items-end justify-around px-1 pt-2 pb-2 max-w-screen overflow-hidden">
           {navItems.map(({ href, label, icon: Icon, isAccent }) => {
             const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href) && href !== '/orders');
             const isNewOrder = isAccent;
@@ -60,7 +60,7 @@ export default function MobileNav() {
               <Link
                 key={href}
                 href={href}
-                className="flex flex-col items-center gap-1 min-w-[48px] py-1 px-1 rounded-xl transition-all duration-200 active:scale-95"
+                className="flex flex-col items-center gap-1 flex-1 min-w-0 py-1 rounded-xl transition-all duration-200 active:scale-95"
               >
                 <span
                   className={`
