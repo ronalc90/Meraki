@@ -41,6 +41,7 @@ export async function getSession(): Promise<{ username: string } | null> {
 const USERS: Record<string, string> = {
   paola: '1234',
   ronald: '1234',
+  lizeth: '1234',
 };
 
 export async function login(username: string, password: string): Promise<{ success: boolean; token?: string; error?: string }> {

@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase'
 import type { Product, ParsedOrder } from '@/lib/types'
 import { generateOrderCode } from '@/lib/utils'
 import AIOrderInput from '@/components/orders/AIOrderInput'
+import { useUser } from '@/lib/UserContext'
 
 type DeliveryType = 'Bogo' | 'Bodega' | 'Otros' | ''
 type DeliveryStatus = 'Confirmado' | 'Entregado' | 'Devolucion' | 'Cancelado'
@@ -102,6 +103,7 @@ export default function NewOrderPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
+  const owner = useUser()
   const sp = use(searchParams)
   const router = useRouter()
 
@@ -127,6 +129,7 @@ export default function NewOrderPage({
         const { data, error } = await supabase
           .from('products')
           .select('*')
+          .eq('owner', owner)
           .eq('active', true)
           .order('name')
 
@@ -200,6 +203,7 @@ export default function NewOrderPage({
         dispatch_date: null,
         guide_number: '',
         prepaid_amount: 0,
+        owner,
       }
 
       const { error } = await supabase.from('orders').insert(payload)

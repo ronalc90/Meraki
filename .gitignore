@@ -49,3 +49,4 @@ scripts/import-output/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+supabase/

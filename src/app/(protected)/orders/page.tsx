@@ -17,6 +17,7 @@ import {
 import { supabase } from '@/lib/supabase'
 import type { Order } from '@/lib/types'
 import { cn, formatCurrency, getMonthDays } from '@/lib/utils'
+import { useUser } from '@/lib/UserContext'
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -69,6 +70,7 @@ export default function OrdersPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
+  const owner = useUser()
   const sp = use(searchParams)
   const router = useRouter()
 
@@ -98,6 +100,7 @@ export default function OrdersPage({
       const { data, error } = await supabase
         .from('orders')
         .select('*')
+        .eq('owner', owner)
         .gte('order_date', from)
         .lte('order_date', to)
 
@@ -110,7 +113,7 @@ export default function OrdersPage({
     } finally {
       setLoading(false)
     }
-  }, [year, month])
+  }, [year, month, owner])
 
   useEffect(() => {
     fetchOrders()

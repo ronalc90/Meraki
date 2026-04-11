@@ -8,6 +8,7 @@ import type { Product } from '@/lib/types'
 import { cn, formatCurrency } from '@/lib/utils'
 import { downloadExcel } from '@/lib/export'
 import ProductPhotoAI from '@/components/products/ProductPhotoAI'
+import { useUser } from '@/lib/UserContext'
 
 const CATEGORIES = ['Pantuflas', 'Maxisaco', 'Pocillo', 'Bolso', 'Otro'] as const
 type Category = (typeof CATEGORIES)[number]
@@ -94,6 +95,7 @@ export default function ProductsPage({
   // searchParams not used but accepted per Next.js 16 convention
   void use(searchParams)
 
+  const owner = useUser()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [supabaseOk, setSupabaseOk] = useState(true)
@@ -114,6 +116,7 @@ export default function ProductsPage({
       const { data, error } = await supabase
         .from('products')
         .select('*')
+        .eq('owner', owner)
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -125,7 +128,7 @@ export default function ProductsPage({
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [owner])
 
   useEffect(() => {
     fetchProducts()
@@ -180,6 +183,7 @@ export default function ProductsPage({
         cost,
         category: form.category,
         active: form.active,
+        owner,
       }
       if (editingProduct) {
         const { error } = await supabase
@@ -235,7 +239,7 @@ export default function ProductsPage({
           <button
             onClick={async () => {
               try {
-                await downloadExcel('products')
+                await downloadExcel('products', { owner })
               } catch {
                 toast.error('Error al exportar')
               }

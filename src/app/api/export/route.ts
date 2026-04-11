@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
   const month = searchParams.get('month')
   const year = searchParams.get('year')
   const date = searchParams.get('date')
+  const owner = searchParams.get('owner')
 
   const supabase = getServiceClient()
   const workbook = new ExcelJS.Workbook()
@@ -71,6 +72,7 @@ export async function GET(request: NextRequest) {
       const { data: orders, error } = await supabase
         .from('orders')
         .select('*')
+        .eq('owner', owner)
         .gte('order_date', from)
         .lte('order_date', to)
         .order('order_date', { ascending: true })
@@ -177,6 +179,7 @@ export async function GET(request: NextRequest) {
       const { data: orders, error } = await supabase
         .from('orders')
         .select('*')
+        .eq('owner', owner)
         .eq('order_date', date)
         .order('created_at', { ascending: true })
 
@@ -215,6 +218,7 @@ export async function GET(request: NextRequest) {
       const { data: items, error } = await supabase
         .from('inventory')
         .select('*')
+        .eq('owner', owner)
         .order('created_at', { ascending: true })
 
       if (error) throw error
@@ -252,6 +256,7 @@ export async function GET(request: NextRequest) {
       const { data: products, error } = await supabase
         .from('products')
         .select('*')
+        .eq('owner', owner)
         .order('created_at', { ascending: true })
 
       if (error) throw error

@@ -18,6 +18,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import type { Order } from '@/lib/types'
 import { cn, formatCurrency } from '@/lib/utils'
+import { useUser } from '@/lib/UserContext'
 
 function todayISO(): string {
   const d = new Date()
@@ -411,6 +412,7 @@ function RouteView({
 type ViewMode = 'guias' | 'ruta'
 
 export default function DispatchPage() {
+  const owner = useUser()
   const [date, setDate] = useState(todayISO())
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(false)
@@ -424,6 +426,7 @@ export default function DispatchPage() {
       const { data, error } = await supabase
         .from('orders')
         .select('*')
+        .eq('owner', owner)
         .eq('order_date', d)
         .eq('delivery_status', 'Confirmado')
         .order('id', { ascending: true })
@@ -435,7 +438,7 @@ export default function DispatchPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [owner])
 
   useEffect(() => {
     loadOrders(date)

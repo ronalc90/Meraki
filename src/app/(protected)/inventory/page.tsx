@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase'
 import type { InventoryItem } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { downloadExcel } from '@/lib/export'
+import { useUser } from '@/lib/UserContext'
 
 const CATEGORIES = ['Pantuflas', 'Maxisacos', 'Accesorios', 'Otro']
 const COLORS = ['Negro', 'Blanco', 'Gris', 'Beige', 'Rosado', 'Azul', 'Verde', 'Rojo', 'Morado', 'Multicolor']
@@ -242,6 +243,7 @@ function InventoryModal({ item, onClose, onSave, saving }: ModalProps) {
 }
 
 export default function InventoryPage() {
+  const owner = useUser()
   const [items, setItems] = useState<InventoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'verified' | 'defective'>('verified')
@@ -260,6 +262,7 @@ export default function InventoryPage() {
       const { data, error } = await supabase
         .from('inventory')
         .select('*')
+        .eq('owner', owner)
         .order('created_at', { ascending: false })
       if (error) throw error
       setItems(data ?? [])
@@ -269,7 +272,7 @@ export default function InventoryPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [owner])
 
   useEffect(() => {
     loadItems()
@@ -311,7 +314,7 @@ export default function InventoryPage() {
         toast.success('Producto actualizado')
       } else {
         const { id: _id, created_at: _ca, ...rest } = data as InventoryItem
-        const { error } = await supabase.from('inventory').insert(rest)
+        const { error } = await supabase.from('inventory').insert({ ...rest, owner })
         if (error) throw error
         toast.success('Producto agregado')
       }
@@ -353,7 +356,7 @@ export default function InventoryPage() {
               <button
                 onClick={async () => {
                   try {
-                    await downloadExcel('inventory')
+                    await downloadExcel('inventory', { owner })
                   } catch {
                     toast.error('Error al exportar')
                   }

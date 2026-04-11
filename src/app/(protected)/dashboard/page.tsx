@@ -31,6 +31,7 @@ import { supabase } from '@/lib/supabase'
 import type { Order } from '@/lib/types'
 import { cn, formatCurrency } from '@/lib/utils'
 import { downloadExcel } from '@/lib/export'
+import { useUser } from '@/lib/UserContext'
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -124,6 +125,7 @@ interface ChartDatum {
 }
 
 export default function DashboardPage() {
+  const owner = useUser()
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
@@ -139,6 +141,7 @@ export default function DashboardPage() {
       const { data, error } = await supabase
         .from('orders')
         .select('*')
+        .eq('owner', owner)
         .gte('order_date', from)
         .lte('order_date', to)
         .order('order_date', { ascending: false })
@@ -150,7 +153,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [owner])
 
   useEffect(() => {
     loadOrders(year, month)
@@ -256,6 +259,7 @@ export default function DashboardPage() {
                   await downloadExcel('dashboard', {
                     month: String(month),
                     year: String(year),
+                    owner,
                   })
                 } catch {
                   toast.error('Error al exportar')

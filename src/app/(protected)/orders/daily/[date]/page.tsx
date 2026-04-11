@@ -21,6 +21,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import type { Order, DailyKPIs } from '@/lib/types'
 import { cn, formatCurrency, getDayOfWeek } from '@/lib/utils'
+import { useUser } from '@/lib/UserContext'
 
 const DELIVERY_STATUS_OPTIONS = ['Confirmado', 'Entregado', 'Devolucion', 'Cancelado'] as const
 const DELIVERY_TYPE_OPTIONS = ['Bogo', 'Bodega', 'Otros', ''] as const
@@ -304,6 +305,7 @@ export default function DailyOrdersPage({
 }: {
   params: Promise<{ date: string }>
 }) {
+  const owner = useUser()
   const { date } = use(params)
   const router = useRouter()
 
@@ -317,6 +319,7 @@ export default function DailyOrdersPage({
       const { data, error } = await supabase
         .from('orders')
         .select('*')
+        .eq('owner', owner)
         .eq('order_date', date)
         .order('created_at', { ascending: true })
 
@@ -329,7 +332,7 @@ export default function DailyOrdersPage({
     } finally {
       setLoading(false)
     }
-  }, [date])
+  }, [date, owner])
 
   useEffect(() => {
     fetchOrders()
