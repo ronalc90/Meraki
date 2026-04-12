@@ -17,7 +17,7 @@ import { useState } from 'react';
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/orders', label: 'Pedidos', icon: ShoppingBag },
-  { href: '/orders/new', label: 'Nuevo Pedido', icon: Plus, isAccent: true },
+  { href: '/assistant', label: 'Asistente IA', icon: Plus, isAccent: true },
   { href: '/inventory', label: 'Inventario', icon: Package },
   { href: '/products', label: 'Productos', icon: Tag },
   { href: '/dispatch', label: 'Despacho', icon: Truck },

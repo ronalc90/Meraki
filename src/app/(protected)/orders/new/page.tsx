@@ -2,12 +2,14 @@
 
 import { use, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bot, ClipboardList, AlertTriangle } from 'lucide-react'
+import { Bot, ClipboardList, AlertTriangle, Package } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import type { Product, ParsedOrder } from '@/lib/types'
 import { generateOrderCode } from '@/lib/utils'
 import AIOrderInput from '@/components/orders/AIOrderInput'
+import AIInventoryInput from '@/components/inventory/AIInventoryInput'
+import DispatchGuide from '@/components/dispatch/DispatchGuide'
 import { useUser } from '@/lib/UserContext'
 import { isOwnerSupported } from '@/lib/db'
 
@@ -108,10 +110,15 @@ export default function NewOrderPage({
   const sp = use(searchParams)
   const router = useRouter()
 
-  const [tab, setTab] = useState<'ai' | 'manual'>('manual')
+  const [tab, setTab] = useState<'ai' | 'manual' | 'inventory'>('manual')
   const [products, setProducts] = useState<Product[]>([])
   const [supabaseOk, setSupabaseOk] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [dispatchOrder, setDispatchOrder] = useState<{
+    order_code: string; client_name: string; phone: string;
+    address: string; complement: string; product_ref: string;
+    detail: string; value_to_collect: number; comment: string;
+  } | null>(null)
 
   const prefillDate = typeof sp.date === 'string' ? sp.date : todayString()
 
@@ -230,7 +237,7 @@ export default function NewOrderPage({
         >
           ← Volver
         </button>
-        <h1 className="text-2xl font-bold text-gray-900">Nuevo Pedido</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Nuevo</h1>
       </div>
 
       {!supabaseOk && <SupabaseBanner />}
@@ -247,7 +254,7 @@ export default function NewOrderPage({
           }`}
         >
           <Bot className="h-4 w-4" />
-          Con IA
+          Pedido IA
         </button>
         <button
           type="button"
@@ -259,30 +266,145 @@ export default function NewOrderPage({
           }`}
         >
           <ClipboardList className="h-4 w-4" />
-          Manual
+          Pedido Manual
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('inventory')}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition-all ${
+            tab === 'inventory'
+              ? 'bg-white text-purple-700 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Package className="h-4 w-4" />
+          Inventario IA
         </button>
       </div>
 
-      {/* AI Tab */}
+      {/* AI Tab — saves immediately and shows dispatch guide */}
       {tab === 'ai' && (
         <div className="rounded-2xl border border-purple-100 bg-white overflow-hidden shadow-sm">
           <AIOrderInput onOrderConfirmed={async (parsed: ParsedOrder) => {
-            setForm(prev => ({
-              ...prev,
-              client_name: parsed.client_name || prev.client_name,
-              phone: parsed.phone || prev.phone,
-              address: parsed.address || prev.address,
-              complement: parsed.complement || prev.complement,
-              detail: parsed.detail || prev.detail,
-              comment: parsed.comment || prev.comment,
-              value_to_collect: parsed.value_to_collect ? String(parsed.value_to_collect) : prev.value_to_collect,
-              city: parsed.city || prev.city,
-              product_ref: parsed.product_ref || prev.product_ref,
-            }));
-            setTab('manual');
-            toast.success('Datos cargados en el formulario. Revisa y guarda.');
+            setSaving(true);
+            try {
+              const orderDate = todayString();
+
+              // Look up product cost
+              const selectedProduct = products.find(
+                (p) => p.code === parsed.product_ref || p.name === parsed.product_ref,
+              );
+              const product_cost = selectedProduct?.cost ?? 0;
+
+              // Count existing orders for today to generate sequence
+              const { count } = await supabase
+                .from('orders')
+                .select('*', { count: 'exact', head: true })
+                .eq('order_date', orderDate);
+
+              const sequence = (count ?? 0) + 1;
+              const orderDateObj = new Date(orderDate + 'T00:00:00');
+              const order_code = generateOrderCode(orderDateObj, sequence);
+
+              const hasOwner = await isOwnerSupported();
+              const payload: Record<string, unknown> = {
+                order_code,
+                client_name: parsed.client_name?.trim() ?? '',
+                phone: parsed.phone?.trim() ?? '',
+                city: parsed.city?.trim() ?? '',
+                address: parsed.address?.trim() ?? '',
+                complement: parsed.complement?.trim() ?? '',
+                product_ref: parsed.product_ref?.trim() ?? '',
+                detail: parsed.detail?.trim() ?? '',
+                comment: parsed.comment?.trim() ?? '',
+                value_to_collect: parsed.value_to_collect ?? 0,
+                payment_cash_bogo: 0,
+                payment_cash: 0,
+                payment_transfer: 0,
+                product_cost,
+                delivery_type: '',
+                vendor: 'Paola',
+                delivery_status: 'Confirmado',
+                is_exchange: false,
+                order_date: orderDate,
+                operating_cost: 0,
+                status_complement: '',
+                dispatch_date: null,
+                guide_number: '',
+                prepaid_amount: 0,
+              };
+              if (hasOwner) payload.owner = owner;
+
+              const { error } = await supabase.from('orders').insert(payload);
+              if (error) throw error;
+
+              toast.success('Pedido guardado. Guía lista para imprimir.');
+              setDispatchOrder({
+                order_code,
+                client_name: parsed.client_name ?? '',
+                phone: parsed.phone ?? '',
+                address: parsed.address ?? '',
+                complement: parsed.complement ?? '',
+                product_ref: parsed.product_ref ?? '',
+                detail: parsed.detail ?? '',
+                value_to_collect: parsed.value_to_collect ?? 0,
+                comment: parsed.comment ?? '',
+              });
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : 'Error al guardar el pedido';
+              toast.error(msg);
+            } finally {
+              setSaving(false);
+            }
           }} />
         </div>
+      )}
+
+      {/* Inventory AI Tab */}
+      {tab === 'inventory' && (
+        <div className="rounded-2xl border border-purple-100 bg-white overflow-hidden shadow-sm">
+          <AIInventoryInput onItemsConfirmed={async (items) => {
+            setSaving(true);
+            try {
+              const hasOwner = await isOwnerSupported();
+              const rows = items.map((item) => {
+                const row: Record<string, unknown> = {
+                  model: item.model,
+                  category: item.category,
+                  product_id: item.product_id,
+                  color: item.color,
+                  size: item.size,
+                  quantity: item.quantity,
+                  basket_location: item.basket_location,
+                  type: item.type,
+                  observations: item.observations,
+                  status: 'Bueno',
+                  verified: false,
+                };
+                if (hasOwner) row.owner = owner;
+                return row;
+              });
+
+              const { error } = await supabase.from('inventory').insert(rows);
+              if (error) throw error;
+
+              toast.success(`${items.length} item${items.length !== 1 ? 's' : ''} agregado${items.length !== 1 ? 's' : ''} al inventario`);
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : 'Error al guardar el inventario';
+              toast.error(msg);
+            } finally {
+              setSaving(false);
+            }
+          }} />
+        </div>
+      )}
+
+      {/* Dispatch Guide Modal */}
+      {dispatchOrder && (
+        <DispatchGuide
+          order={dispatchOrder}
+          onClose={() => setDispatchOrder(null)}
+        />
       )}
 
       {/* Manual form */}

@@ -1,0 +1,431 @@
+'use client';
+
+import { useState, useRef, useCallback } from 'react';
+import { Mic, MicOff, Send, Sparkles, Check, X, Loader2, Package, ShoppingBag, Search, MapPin, Printer } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { supabase } from '@/lib/supabase';
+import { useUser } from '@/lib/UserContext';
+import { isOwnerSupported } from '@/lib/db';
+import { formatCurrency, generateOrderCode } from '@/lib/utils';
+
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  action?: string;
+  data?: Record<string, unknown> | Array<Record<string, unknown>>;
+  results?: Array<Record<string, unknown>>;
+  needsConfirmation?: boolean;
+  confirmed?: boolean;
+}
+
+export default function AssistantPage() {
+  const owner = useUser();
+  const [input, setInput] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [pendingAction, setPendingAction] = useState<ChatMessage | null>(null);
+  const [showGuide, setShowGuide] = useState<Record<string, unknown> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback(() => {
+    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+  }, []);
+
+  const sendMessage = async (text: string) => {
+    if (!text.trim()) return;
+    const userMsg: ChatMessage = { role: 'user', content: text };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setIsLoading(true);
+    scrollToBottom();
+
+    try {
+      const res = await fetch('/api/ai/assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, context: messages.slice(-10), owner }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      const assistantMsg: ChatMessage = {
+        role: 'assistant',
+        content: data.message || 'Procesado',
+        action: data.action,
+        data: data.data,
+        results: data.results,
+        needsConfirmation: data.needs_confirmation,
+      };
+      setMessages(prev => [...prev, assistantMsg]);
+
+      if (data.needs_confirmation) {
+        setPendingAction(assistantMsg);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error';
+      toast.error(msg);
+      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${msg}` }]);
+    } finally {
+      setIsLoading(false);
+      scrollToBottom();
+    }
+  };
+
+  const confirmAction = async () => {
+    if (!pendingAction) return;
+    setIsLoading(true);
+
+    try {
+      const hasOwner = await isOwnerSupported();
+
+      if (pendingAction.action === 'create_order') {
+        const orderData = pendingAction.data as Record<string, unknown>;
+        const today = new Date();
+        const dateStr = today.toISOString().slice(0, 10);
+
+        const { data: existing } = await supabase
+          .from('orders')
+          .select('id')
+          .gte('order_date', dateStr)
+          .lte('order_date', dateStr);
+        const seq = (existing?.length || 0) + 1;
+        const orderCode = generateOrderCode(today, seq);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const payload: any = {
+          order_code: orderCode,
+          client_name: orderData.client_name || '',
+          phone: String(orderData.phone || ''),
+          city: String(orderData.city || 'Bogotá'),
+          address: String(orderData.address || ''),
+          complement: String(orderData.complement || ''),
+          product_ref: String(orderData.product_ref || ''),
+          detail: String(orderData.detail || ''),
+          comment: String(orderData.comment || ''),
+          value_to_collect: Number(orderData.value_to_collect) || 0,
+          delivery_status: 'Confirmado',
+          vendor: owner,
+          order_date: dateStr,
+          payment_cash_bogo: 0, payment_cash: 0, payment_transfer: 0,
+          product_cost: 0, operating_cost: 0, prepaid_amount: 0,
+          is_exchange: false,
+        };
+        if (hasOwner) payload.owner = owner;
+
+        const { error } = await supabase.from('orders').insert(payload);
+        if (error) throw error;
+
+        setShowGuide(payload);
+        toast.success('Pedido guardado');
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `Pedido #${orderCode} guardado para ${orderData.client_name}. Puedes imprimir la guía.`,
+          confirmed: true,
+        }]);
+      }
+
+      if (pendingAction.action === 'add_inventory') {
+        const items = pendingAction.data as Array<Record<string, unknown>>;
+        const payloads = items.map(item => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const p: any = {
+            model: item.model || '',
+            category: item.category || 'Pantuflas',
+            product_id: item.product_id || '',
+            color: item.color || '',
+            size: item.size || '',
+            quantity: Number(item.quantity) || 1,
+            basket_location: item.basket_location || '',
+            type: item.type || 'Adulto',
+            observations: item.observations || '',
+            status: 'Bueno',
+            verified: false,
+            reference: 0,
+          };
+          if (hasOwner) p.owner = owner;
+          return p;
+        });
+
+        const { error } = await supabase.from('inventory').insert(payloads);
+        if (error) throw error;
+
+        toast.success(`${items.length} item(s) agregados al inventario`);
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `Listo, ${items.length} item(s) agregados al inventario.`,
+          confirmed: true,
+        }]);
+      }
+
+      setPendingAction(null);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Error al guardar');
+    } finally {
+      setIsLoading(false);
+      scrollToBottom();
+    }
+  };
+
+  const rejectAction = () => {
+    setPendingAction(null);
+    setMessages(prev => [...prev, {
+      role: 'assistant',
+      content: 'Entendido. Puedes corregir y enviarme de nuevo.',
+    }]);
+    scrollToBottom();
+  };
+
+  const startRecording = () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    const SpeechRecognitionAPI = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!SpeechRecognitionAPI) { toast.error('Navegador no soporta voz'); return; }
+
+    const recognition = new SpeechRecognitionAPI();
+    recognition.lang = 'es-CO';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onresult = (event: any) => {
+      let finalT = '', interimT = '';
+      for (let i = 0; i < event.results.length; i++) {
+        const r = event.results[i];
+        if (r.isFinal) finalT += r[0].transcript;
+        else interimT = r[0].transcript;
+      }
+      setInput(finalT || interimT);
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onerror = (e: any) => { if (e.error !== 'no-speech') toast.error('Error de voz'); setIsRecording(false); };
+    recognition.onend = () => setIsRecording(false);
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsRecording(true);
+    toast.success('Escuchando...');
+  };
+
+  const stopRecording = () => {
+    recognitionRef.current?.stop();
+    setIsRecording(false);
+  };
+
+  const actionIcon = (action?: string) => {
+    switch (action) {
+      case 'create_order': return <ShoppingBag className="w-4 h-4 text-blue-500" />;
+      case 'add_inventory': return <Package className="w-4 h-4 text-green-500" />;
+      case 'search_inventory': return <Search className="w-4 h-4 text-purple-500" />;
+      case 'search_orders': return <Search className="w-4 h-4 text-orange-500" />;
+      default: return null;
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-80px)] md:h-[calc(100vh-20px)] max-w-2xl mx-auto">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-gray-100">
+        <div className="flex items-center gap-2">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="font-bold text-lg">Asistente Meraki</h1>
+            <p className="text-xs text-gray-500">Pedidos, inventario, consultas — todo por voz o texto</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Chat area */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        {messages.length === 0 && (
+          <div className="text-center py-12 text-gray-400">
+            <Sparkles className="w-16 h-16 mx-auto mb-4 text-purple-200" />
+            <p className="text-lg font-semibold text-gray-500 mb-2">Hola! Soy tu asistente</p>
+            <p className="text-sm mb-6">Puedo ayudarte con todo. Habla o escribe:</p>
+            <div className="grid grid-cols-1 gap-2 max-w-xs mx-auto text-left">
+              {[
+                { icon: <ShoppingBag className="w-4 h-4 text-blue-500" />, text: '"Carlos 3203436512 Calle 80A clásica miel $60.000"' },
+                { icon: <Package className="w-4 h-4 text-green-500" />, text: '"Tengo 10 vaquitas blancas talla 38 en C015"' },
+                { icon: <Search className="w-4 h-4 text-purple-500" />, text: '"¿Dónde están las pantuflas de Stitch?"' },
+                { icon: <MapPin className="w-4 h-4 text-orange-500" />, text: '"¿Cuántos pedidos hay hoy?"' },
+              ].map((ex, i) => (
+                <button key={i} onClick={() => setInput(ex.text.replace(/"/g, ''))} className="flex items-start gap-2 p-2 rounded-lg hover:bg-gray-50 text-xs text-gray-600 text-left transition">
+                  {ex.icon}
+                  <span>{ex.text}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
+              msg.role === 'user'
+                ? 'bg-purple-600 text-white rounded-br-md'
+                : 'bg-gray-100 text-gray-800 rounded-bl-md'
+            }`}>
+              {msg.action && msg.role === 'assistant' && (
+                <div className="flex items-center gap-1.5 mb-1 text-xs font-medium text-gray-500">
+                  {actionIcon(msg.action)}
+                  {msg.action === 'create_order' && 'Nuevo pedido'}
+                  {msg.action === 'add_inventory' && 'Agregar inventario'}
+                  {msg.action === 'search_inventory' && 'Buscar inventario'}
+                  {msg.action === 'search_orders' && 'Consultar pedidos'}
+                </div>
+              )}
+              <p className="whitespace-pre-wrap">{msg.content}</p>
+
+              {/* Order preview */}
+              {msg.action === 'create_order' && msg.data && (
+                <div className="mt-2 p-3 bg-blue-50 rounded-xl text-xs space-y-1 border border-blue-100">
+                  {Object.entries(msg.data as Record<string, unknown>).filter(([, v]) => v).map(([k, v]) => (
+                    <p key={k}><span className="font-medium">{k}:</span> {k === 'value_to_collect' ? formatCurrency(Number(v)) : String(v)}</p>
+                  ))}
+                </div>
+              )}
+
+              {/* Inventory items preview */}
+              {msg.action === 'add_inventory' && Array.isArray(msg.data) && (
+                <div className="mt-2 space-y-1">
+                  {(msg.data as Array<Record<string, unknown>>).map((item, j) => (
+                    <div key={j} className="p-2 bg-green-50 rounded-lg text-xs border border-green-100">
+                      <span className="font-medium">{String(item.quantity)}x {String(item.model)}</span>
+                      {item.color ? <span> {String(item.color)}</span> : null}
+                      {item.size ? <span> T.{String(item.size)}</span> : null}
+                      {item.basket_location ? <span> → {String(item.basket_location)}</span> : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Search results */}
+              {msg.results && msg.results.length > 0 && (
+                <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                  {msg.results.slice(0, 10).map((r, j) => (
+                    <div key={j} className="p-2 bg-white rounded-lg text-xs border border-gray-200">
+                      {r.model ? <span className="font-medium">{String(r.model)}</span> : null}
+                      {r.client_name ? <span className="font-medium">{String(r.client_name)}</span> : null}
+                      {r.color ? <span> {String(r.color)}</span> : null}
+                      {r.size ? <span> T.{String(r.size)}</span> : null}
+                      {r.quantity ? <span> Cant: {String(r.quantity)}</span> : null}
+                      {r.basket_location ? <span> {String(r.basket_location)}</span> : null}
+                      {r.value_to_collect ? <span> {formatCurrency(Number(r.value_to_collect))}</span> : null}
+                      {r.delivery_status ? <span className="ml-1 text-purple-600">[{String(r.delivery_status)}]</span> : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {msg.confirmed && <span className="inline-block mt-1 text-green-600 text-xs font-medium">✓ Guardado</span>}
+            </div>
+          </div>
+        ))}
+
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="bg-gray-100 rounded-2xl rounded-bl-md px-4 py-3">
+              <Loader2 className="w-5 h-5 animate-spin text-purple-500" />
+            </div>
+          </div>
+        )}
+
+        <div ref={chatEndRef} />
+      </div>
+
+      {/* Confirmation bar */}
+      {pendingAction && (
+        <div className="mx-4 mb-2 p-3 bg-yellow-50 border border-yellow-200 rounded-xl animate-fadeIn">
+          <p className="text-sm font-semibold text-yellow-800 mb-2">¿Confirmar esta acción?</p>
+          <div className="flex gap-2">
+            <button onClick={confirmAction} disabled={isLoading} className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-green-700 transition disabled:opacity-50">
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Confirmar
+            </button>
+            <button onClick={rejectAction} className="flex-1 flex items-center justify-center gap-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg py-2 text-sm font-medium hover:bg-gray-50 transition">
+              <X className="w-4 h-4" /> Corregir
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Input area */}
+      <div className="border-t border-gray-200 p-3 bg-white mb-16 md:mb-0">
+        <div className="flex items-end gap-2">
+          <button
+            onClick={isRecording ? stopRecording : startRecording}
+            disabled={isLoading}
+            className={`relative flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center transition ${
+              isRecording ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+          </button>
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
+            placeholder="Pedido, inventario, consulta..."
+            rows={1}
+            className="flex-1 resize-none rounded-xl border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent max-h-24"
+            style={{ minHeight: '44px' }}
+            disabled={isLoading}
+          />
+          <button
+            onClick={() => sendMessage(input)}
+            disabled={!input.trim() || isLoading}
+            className="flex-shrink-0 w-11 h-11 rounded-full bg-purple-600 text-white flex items-center justify-center hover:bg-purple-700 transition disabled:opacity-40"
+          >
+            <Send className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Dispatch Guide Modal */}
+      {showGuide && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden">
+            <div className="print-area">
+              <div className="bg-purple-700 text-white text-center py-4 px-6">
+                <h2 className="text-xl font-black">Tu Tienda Meraki</h2>
+                <p className="text-purple-200 text-sm">Guía de Envío</p>
+              </div>
+              <div className="p-5 space-y-2 text-sm">
+                {[
+                  ['ID Pedido', showGuide.order_code],
+                  ['Cliente', showGuide.client_name],
+                  ['Celular', showGuide.phone],
+                  ['Dirección', showGuide.address],
+                  ['Complemento', showGuide.complement],
+                  ['Referencia', showGuide.product_ref],
+                  ['Detalle', showGuide.detail],
+                  ['Valor', formatCurrency(Number(showGuide.value_to_collect))],
+                  ['Comentario', showGuide.comment],
+                ].filter(([, v]) => v).map(([label, value]) => (
+                  <div key={String(label)} className="flex border-b border-gray-100 py-1.5">
+                    <span className="font-semibold text-gray-500 w-28 flex-shrink-0">{String(label)}</span>
+                    <span className="text-gray-800">{String(value)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="text-center py-3 text-xs text-gray-500 border-t">
+                Mayor Información 3203880422
+              </div>
+            </div>
+            <div className="flex gap-2 p-4 border-t print:hidden">
+              <button onClick={() => window.print()} className="flex-1 flex items-center justify-center gap-2 bg-purple-600 text-white rounded-xl py-2.5 font-semibold hover:bg-purple-700 transition">
+                <Printer className="w-4 h-4" /> Imprimir
+              </button>
+              <button onClick={() => setShowGuide(null)} className="flex-1 bg-gray-100 text-gray-700 rounded-xl py-2.5 font-semibold hover:bg-gray-200 transition">
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

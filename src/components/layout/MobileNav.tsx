@@ -13,7 +13,7 @@ import {
 const navItems = [
   { href: '/dashboard', label: 'Inicio', icon: LayoutDashboard },
   { href: '/orders', label: 'Pedidos', icon: ShoppingBag },
-  { href: '/orders/new', label: 'Nuevo', icon: Plus, isAccent: true },
+  { href: '/assistant', label: 'Asistente', icon: Plus, isAccent: true },
   { href: '/inventory', label: 'Inventario', icon: Package },
   { href: '/dispatch', label: 'Despacho', icon: Truck },
 ];
