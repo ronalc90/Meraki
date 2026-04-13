@@ -25,40 +25,43 @@ export default function DispatchGuide({ order, onClose }: DispatchGuideProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
-        {/* Guide card */}
-        <div className="print-area border-2 border-gray-800">
-          {/* Header */}
-          <div className="bg-purple-700 px-5 py-4 text-center">
-            <h1 className="text-lg font-bold text-white tracking-wide">Tu Tienda Meraki</h1>
-            <p className="text-purple-200 text-xs mt-0.5">Guía de Envío</p>
-          </div>
+        {/* Guide card — matches Excel template format exactly */}
+        <div className="print-area">
+          <div className="border-2 border-solid border-gray-800 guide-card" style={{ height: 'auto' }}>
+            {/* Header */}
+            <div className="text-center py-3 px-4 border-b-2 border-solid border-gray-800 bg-gray-50 guide-card-header">
+              <h2 className="font-black text-xl tracking-tight text-gray-900 uppercase">
+                Tu Tienda Meraki
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5 font-medium">Guía de Envío</p>
+            </div>
 
-          {/* Fields */}
-          <div className="px-5 py-4 space-y-3">
-            <GuideRow label="ID Pedido" value={order.order_code} highlight />
-            <GuideRow label="Cliente" value={order.client_name} />
-            <GuideRow label="Celular" value={order.phone} />
-            <GuideRow label="Dirección" value={order.address} />
-            {order.complement && (
-              <GuideRow label="Complemento" value={order.complement} />
-            )}
-            {order.product_ref && (
-              <GuideRow label="Referencia" value={order.product_ref} />
-            )}
-            <GuideRow label="Detalle" value={order.detail} />
-            <GuideRow
-              label="Valor a cobrar"
-              value={formatCurrency(order.value_to_collect)}
-              highlight
-            />
-            {order.comment && (
-              <GuideRow label="Comentario" value={order.comment} />
-            )}
-          </div>
+            {/* Fields */}
+            <div className="px-4 py-3 space-y-0 text-sm guide-card-body">
+              <GuideRow label="ID Pedido" value={order.order_code} bold />
+              <GuideRow label="Cliente" value={order.client_name} semibold />
+              <GuideRow label="Celular" value={order.phone} />
+              <GuideRow label="Dirección" value={order.address} />
+              {order.complement && <GuideRow label="Barrio" value={order.complement} />}
+              {order.product_ref && <GuideRow label="Referencia" value={order.product_ref} />}
+              <GuideRow label="Detalle" value={order.detail} />
+              <div className="flex gap-2 items-center pt-2 mt-1 border-t-2 border-solid border-gray-400 guide-row">
+                <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
+                  Valor a cobrar
+                </span>
+                <span className="text-xl font-black text-gray-900 guide-value guide-value-big">
+                  {formatCurrency(order.value_to_collect)}
+                </span>
+              </div>
+              {order.comment && <GuideRow label="Comentario" value={order.comment} italic />}
+            </div>
 
-          {/* Footer */}
-          <div className="border-t-2 border-gray-800 px-5 py-3 text-center">
-            <p className="text-xs text-gray-600 font-medium">Mayor Información 3203880422</p>
+            {/* Footer */}
+            <div className="py-2 border-t-2 border-solid border-gray-800 text-center bg-gray-50 guide-card-footer">
+              <p className="text-xs font-bold text-gray-600">
+                Mayor Información 3203880422
+              </p>
+            </div>
           </div>
         </div>
 
@@ -75,7 +78,7 @@ export default function DispatchGuide({ order, onClose }: DispatchGuideProps) {
             className="flex-[2] rounded-xl py-2.5 text-sm font-bold text-white shadow-md transition-all hover:-translate-y-0.5"
             style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #9061f9 100%)' }}
           >
-            Imprimir
+            Imprimir Guía
           </button>
         </div>
       </div>
@@ -86,14 +89,25 @@ export default function DispatchGuide({ order, onClose }: DispatchGuideProps) {
 interface GuideRowProps {
   label: string;
   value: string;
-  highlight?: boolean;
+  bold?: boolean;
+  semibold?: boolean;
+  italic?: boolean;
 }
 
-function GuideRow({ label, value, highlight }: GuideRowProps) {
+function GuideRow({ label, value, bold, semibold, italic }: GuideRowProps) {
   return (
-    <div className="flex items-start gap-2">
-      <span className="text-xs font-semibold text-gray-500 w-28 shrink-0 pt-0.5">{label}:</span>
-      <span className={`text-sm flex-1 ${highlight ? 'font-bold text-purple-700' : 'text-gray-800'}`}>
+    <div className="flex gap-2 border-b border-gray-200 py-1.5 guide-row">
+      <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
+        {label}
+      </span>
+      <span
+        className={`flex-1 text-sm guide-value ${
+          bold ? 'font-bold text-gray-900' :
+          semibold ? 'font-semibold text-gray-800' :
+          italic ? 'text-gray-700 italic' :
+          'text-gray-800'
+        }`}
+      >
         {value || '—'}
       </span>
     </div>

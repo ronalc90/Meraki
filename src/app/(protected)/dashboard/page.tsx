@@ -167,19 +167,23 @@ export default function DashboardPage() {
     else setMonth((m) => m + 1)
   }
 
-  // KPI calculations
+  // KPI calculations — include Confirmado + Entregado as "active" orders
   const delivered = orders.filter((o) => o.delivery_status === 'Entregado')
   const confirmed = orders.filter((o) => o.delivery_status === 'Confirmado')
   const returns   = orders.filter((o) => o.delivery_status === 'Devolucion')
   const cancelled = orders.filter((o) => o.delivery_status === 'Cancelado')
+  const activeOrders = orders.filter((o) => o.delivery_status === 'Confirmado' || o.delivery_status === 'Entregado')
 
-  const revenueBogo     = delivered.reduce((s, o) => s + o.payment_cash_bogo, 0)
-  const revenueCash     = delivered.reduce((s, o) => s + o.payment_cash, 0)
-  const revenueTransfer = delivered.reduce((s, o) => s + o.payment_transfer, 0)
-  const totalRevenue    = delivered.reduce((s, o) => s + o.value_to_collect, 0)
+  // Revenue: active orders (Confirmado + Entregado), NOT cancelled/returned
+  const revenueBogo     = activeOrders.reduce((s, o) => s + o.payment_cash_bogo, 0)
+  const revenueCash     = activeOrders.reduce((s, o) => s + o.payment_cash, 0)
+  const revenueTransfer = activeOrders.reduce((s, o) => s + o.payment_transfer, 0)
+  const totalRevenue    = activeOrders.reduce((s, o) => s + o.value_to_collect, 0)
+  const confirmedRevenue = confirmed.reduce((s, o) => s + o.value_to_collect, 0)
+  const deliveredRevenue = delivered.reduce((s, o) => s + o.value_to_collect, 0)
 
-  const totalCosts    = delivered.reduce((s, o) => s + o.product_cost, 0)
-  const totalOpCosts  = delivered.reduce((s, o) => s + o.operating_cost, 0)
+  const totalCosts    = activeOrders.reduce((s, o) => s + o.product_cost, 0)
+  const totalOpCosts  = activeOrders.reduce((s, o) => s + o.operating_cost, 0)
   const totalExpenses = totalCosts + totalOpCosts
 
   const profit = totalRevenue - totalExpenses
@@ -187,12 +191,12 @@ export default function DashboardPage() {
   const ordersPaola = orders.filter((o) => o.vendor?.toLowerCase().includes('paola')).length
 
   const totalOrders = orders.length
-  const avgPerOrder = delivered.length > 0 ? totalRevenue / delivered.length : 0
+  const avgPerOrder = activeOrders.length > 0 ? totalRevenue / activeOrders.length : 0
   const returnRate = totalOrders > 0 ? ((returns.length / totalOrders) * 100).toFixed(1) : '0.0'
   const cancelRate = totalOrders > 0 ? ((cancelled.length / totalOrders) * 100).toFixed(1) : '0.0'
 
-  // Top 5 products by product_ref
-  const productMap = delivered.reduce<Record<string, { count: number; total: number }>>((acc, o) => {
+  // Top 5 products by product_ref (active orders)
+  const productMap = activeOrders.reduce<Record<string, { count: number; total: number }>>((acc, o) => {
     const ref = o.product_ref?.trim()
     if (!ref) return acc
     if (!acc[ref]) acc[ref] = { count: 0, total: 0 }
@@ -204,20 +208,23 @@ export default function DashboardPage() {
     .sort((a, b) => b[1].count - a[1].count)
     .slice(0, 5)
 
-  // Payment breakdown for pie chart
+  // Payment breakdown for pie chart (only delivered — payments registered at delivery)
+  const deliveredBogo     = delivered.reduce((s, o) => s + o.payment_cash_bogo, 0)
+  const deliveredCash     = delivered.reduce((s, o) => s + o.payment_cash, 0)
+  const deliveredTransfer = delivered.reduce((s, o) => s + o.payment_transfer, 0)
   const paymentPieData = [
-    { name: 'Bogo', value: revenueBogo },
-    { name: 'Caja', value: revenueCash },
-    { name: 'Transferencia', value: revenueTransfer },
+    { name: 'Bogo', value: deliveredBogo },
+    { name: 'Caja', value: deliveredCash },
+    { name: 'Transferencia', value: deliveredTransfer },
   ].filter((d) => d.value > 0)
   const PIE_COLORS = ['#7c3aed', '#10b981', '#0ea5e9']
 
-  // Chart data: revenue per day
+  // Chart data: revenue per day (active orders)
   const daysInMonth = new Date(year, month, 0).getDate()
   const chartData: ChartDatum[] = Array.from({ length: daysInMonth }, (_, i) => {
     const day = String(i + 1).padStart(2, '0')
     const dateStr = `${year}-${String(month).padStart(2, '0')}-${day}`
-    const dayRevenue = delivered
+    const dayRevenue = activeOrders
       .filter((o) => o.order_date === dateStr)
       .reduce((s, o) => s + o.value_to_collect, 0)
     return { day: String(i + 1), revenue: dayRevenue }
@@ -299,15 +306,14 @@ export default function DashboardPage() {
                 }
               />
               <KPICard
-                label="Recaudo Total"
+                label="Valor Total Pedidos"
                 value={formatCurrency(totalRevenue)}
                 icon={<Banknote className="h-5 w-5" />}
                 color="#0ea5e9"
                 sub={
                   <SubBreakdown items={[
-                    { label: 'Bogo', value: formatCurrency(revenueBogo), color: '#3b82f6' },
-                    { label: 'Caja', value: formatCurrency(revenueCash), color: '#10b981' },
-                    { label: 'Transfer', value: formatCurrency(revenueTransfer), color: '#8b5cf6' },
+                    { label: 'Cobrado', value: formatCurrency(deliveredRevenue), color: '#10b981' },
+                    { label: 'Pendiente', value: formatCurrency(confirmedRevenue), color: '#3b82f6' },
                   ]} />
                 }
               />
@@ -413,7 +419,7 @@ export default function DashboardPage() {
                 </h2>
                 {top5Products.length === 0 ? (
                   <div className="flex h-32 items-center justify-center text-sm text-gray-400">
-                    Sin datos de pedidos entregados
+                    Sin datos de pedidos activos
                   </div>
                 ) : (
                   <div className="space-y-2">

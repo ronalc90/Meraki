@@ -167,13 +167,34 @@ export default function ProductsPage({
   }
 
   async function handleSave() {
-    if (!form.code.trim() || !form.name.trim() || !form.cost) {
-      toast.error('Completa todos los campos requeridos')
+    if (!form.code.trim()) {
+      toast.error('El código del producto es requerido')
+      return
+    }
+    if (!form.name.trim()) {
+      toast.error('El nombre del producto es requerido')
+      return
+    }
+    if (!form.cost) {
+      toast.error('El costo del producto es requerido')
       return
     }
     const cost = parseFloat(form.cost)
-    if (isNaN(cost) || cost < 0) {
+    if (isNaN(cost)) {
       toast.error('El costo debe ser un número válido')
+      return
+    }
+    if (cost < 0) {
+      toast.error('El costo no puede ser negativo')
+      return
+    }
+    // Check for duplicate code (only when creating, or when editing and code changed)
+    const codeUpper = form.code.trim().toUpperCase()
+    const isDuplicate = products.some(
+      (p) => p.code.toUpperCase() === codeUpper && p.id !== editingProduct?.id
+    )
+    if (isDuplicate) {
+      toast.error(`Ya existe un producto con el código "${codeUpper}"`)
       return
     }
     setSaving(true)

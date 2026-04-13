@@ -27,6 +27,18 @@ export async function GET(request: NextRequest) {
       if (error) throw error;
 
       if (!data) {
+        // Check env var fallback for openai_api_key
+        if (key === 'openai_api_key') {
+          const envKey = process.env.OPENAI_API_KEY;
+          if (envKey?.trim()) {
+            return NextResponse.json({
+              key,
+              value: `env-...${envKey.slice(-4)}`,
+              exists: true,
+              source: 'environment',
+            });
+          }
+        }
         return NextResponse.json({ key, value: null, exists: false });
       }
 

@@ -49,8 +49,89 @@ input, select, textarea { font-size: 16px !important; }
 @media print {
   body * { visibility: hidden; }
   .print-area, .print-area * { visibility: visible; }
-  .print-area { position: absolute; left: 0; top: 0; width: 100%; }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
   .no-print { display: none !important; }
+
+  /* Guide cards: exact 4-per-page (2x2) with proper spacing */
+  .guide-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    padding: 8px !important;
+  }
+  .guide-card {
+    border: 2px solid #000 !important;
+    border-radius: 0 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    height: calc(50vh - 16px) !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    flex-direction: column !important;
+    font-size: 12px !important;
+    overflow: hidden !important;
+  }
+  .guide-card-header {
+    border-bottom: 2px solid #000 !important;
+    padding: 8px !important;
+    text-align: center !important;
+  }
+  .guide-card-header h2 {
+    font-size: 18px !important;
+    font-weight: 900 !important;
+    letter-spacing: 1px !important;
+  }
+  .guide-card-body {
+    flex: 1 !important;
+    padding: 8px 12px !important;
+  }
+  .guide-card-body .guide-row {
+    display: flex !important;
+    border-bottom: 1px solid #ccc !important;
+    padding: 3px 0 !important;
+  }
+  .guide-card-body .guide-row:last-child {
+    border-bottom: none !important;
+  }
+  .guide-card-body .guide-label {
+    width: 100px !important;
+    font-weight: 700 !important;
+    font-size: 10px !important;
+    text-transform: uppercase !important;
+    color: #333 !important;
+    flex-shrink: 0 !important;
+  }
+  .guide-card-body .guide-value {
+    flex: 1 !important;
+    font-size: 12px !important;
+    color: #000 !important;
+  }
+  .guide-card-body .guide-value-big {
+    font-size: 18px !important;
+    font-weight: 900 !important;
+  }
+  .guide-card-footer {
+    border-top: 2px solid #000 !important;
+    padding: 6px !important;
+    text-align: center !important;
+    font-size: 10px !important;
+    font-weight: 600 !important;
+  }
+  /* Force page break after every 4th card */
+  .guide-page-break {
+    break-after: page !important;
+    page-break-after: always !important;
+  }
+
+  @page {
+    margin: 5mm;
+    size: letter;
+  }
 }
 
 /* Custom animations */

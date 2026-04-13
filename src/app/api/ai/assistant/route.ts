@@ -19,6 +19,7 @@ Eres un multi-agente que puede:
 2. **AGREGAR INVENTARIO**: Cuando dice "tengo X de tal", "llegaron X", "puse X en canasta Y"
 3. **BUSCAR INVENTARIO**: Cuando pregunta "dónde está...", "cuántos tengo de...", "hay pantuflas talla 38?"
 4. **CONSULTAR PEDIDOS**: Cuando pregunta "cuántos pedidos hoy", "pedidos pendientes", etc.
+5. **BUSCAR PRODUCTOS**: Cuando pregunta sobre el catálogo: "qué productos tengo", "cuánto cuesta...", "muestra las pantuflas"
 
 Analiza el contexto y decide qué acción tomar. Responde SIEMPRE en JSON:
 
@@ -79,6 +80,17 @@ Para CONSULTAR PEDIDOS:
     "client": "string o null"
   },
   "message": "voy a buscar..."
+}
+
+Para BUSCAR PRODUCTOS del catálogo:
+{
+  "action": "search_products",
+  "search": {
+    "name": "string o null",
+    "code": "string o null",
+    "category": "Pantuflas|Maxisaco|Pocillo|Bolso|Otro o null"
+  },
+  "message": "voy a buscar en el catálogo..."
 }
 
 Para CONVERSACIÓN GENERAL o si falta info:
@@ -157,6 +169,26 @@ export async function POST(request: NextRequest) {
       } else {
         const summary = results.map(r => `• ${r.model} ${r.color || ''} ${r.size || ''} - Cantidad: ${r.quantity} - Canasta: ${r.basket_location}`).join('\n');
         parsed.message = `Encontré ${results.length} resultado(s):\n${summary}`;
+        parsed.results = results;
+      }
+    }
+
+    if (parsed.action === 'search_products') {
+      const s = parsed.search || {};
+      let query = supabase.from('products').select('*');
+      if (owner) query = query.eq('owner', owner);
+      if (s.name) query = query.ilike('name', `%${s.name}%`);
+      if (s.code) query = query.ilike('code', `%${s.code}%`);
+      if (s.category) query = query.ilike('category', `%${s.category}%`);
+      query = query.eq('active', true);
+      const { data: results } = await query.order('name').limit(20);
+
+      if (!results?.length) {
+        parsed.message = `No encontré productos con esas características en el catálogo.`;
+        parsed.results = [];
+      } else {
+        const summary = results.map(r => `• ${r.code} — ${r.name} (${r.category}) — $${Number(r.cost).toLocaleString('es-CO')}`).join('\n');
+        parsed.message = `Encontré ${results.length} producto(s) en el catálogo:\n${summary}`;
         parsed.results = results;
       }
     }

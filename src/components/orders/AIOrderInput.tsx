@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Mic, MicOff, Send, Sparkles, Check, X, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatCurrency } from '@/lib/utils';
@@ -71,6 +71,19 @@ export default function AIOrderInput({ onOrderConfirmed }: AIOrderInputProps) {
     }
   };
 
+  // Keep track of text before recording started so we can append
+  const preRecordTextRef = useRef('');
+  const wasRecordingRef = useRef(false);
+
+  // Auto-send when recording stops and there's text
+  useEffect(() => {
+    if (wasRecordingRef.current && !isRecording && input.trim()) {
+      sendMessage(input);
+    }
+    wasRecordingRef.current = isRecording;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRecording]);
+
   const startRecording = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = window as any;
@@ -80,6 +93,9 @@ export default function AIOrderInput({ onOrderConfirmed }: AIOrderInputProps) {
       toast.error('Tu navegador no soporta reconocimiento de voz');
       return;
     }
+
+    // Save current input so we can append new voice to it
+    preRecordTextRef.current = input;
 
     const recognition = new SpeechRecognitionAPI();
     recognition.lang = 'es-CO';
@@ -98,7 +114,9 @@ export default function AIOrderInput({ onOrderConfirmed }: AIOrderInputProps) {
           interimTranscript = result[0].transcript;
         }
       }
-      setInput(finalTranscript || interimTranscript);
+      const newText = finalTranscript || interimTranscript;
+      const prev = preRecordTextRef.current;
+      setInput(prev ? `${prev} ${newText}` : newText);
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -123,9 +141,6 @@ export default function AIOrderInput({ onOrderConfirmed }: AIOrderInputProps) {
   const stopRecording = () => {
     recognitionRef.current?.stop();
     setIsRecording(false);
-    if (input.trim()) {
-      toast.success('Voz capturada. Revisa y envía.');
-    }
   };
 
   const confirmOrder = () => {

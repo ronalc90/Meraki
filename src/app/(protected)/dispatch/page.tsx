@@ -68,7 +68,7 @@ function PrintView({ orders, onClose }: { orders: Order[]; onClose: () => void }
 
       {/* Cards grid — 2 per row, page break every 4 cards */}
       <div className="print-area p-6 print:p-0">
-        <div className="grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-4 print:gap-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 guide-grid">
           {orders.map((order, idx) => {
             // After every 4th card (index 3, 7, 11…) force a page break
             const isLastInPage = (idx + 1) % 4 === 0 && idx !== orders.length - 1
@@ -76,88 +76,87 @@ function PrintView({ orders, onClose }: { orders: Order[]; onClose: () => void }
               <div
                 key={order.id}
                 className={cn(
-                  'border-2 border-solid border-gray-700 rounded-lg p-4 flex flex-col',
-                  'print:rounded-none print:border print:border-solid print:border-gray-800',
-                  'print:break-inside-avoid print:m-1',
-                  isLastInPage ? 'print:break-after-page' : ''
+                  'border-2 border-solid border-gray-800 rounded-lg flex flex-col guide-card',
+                  isLastInPage ? 'guide-page-break' : ''
                 )}
               >
                 {/* Card header */}
-                <div className="text-center mb-3 pb-2 border-b-2 border-solid border-gray-400">
-                  <p className="font-black text-xl tracking-tight text-gray-900 uppercase">
+                <div className="text-center py-3 px-4 border-b-2 border-solid border-gray-800 bg-gray-50 guide-card-header">
+                  <h2 className="font-black text-xl tracking-tight text-gray-900 uppercase">
                     Tu Tienda Meraki
-                  </p>
-                  <p className="text-xs text-gray-500 mt-0.5">Guía de Envío</p>
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-0.5 font-medium">Guía de Envío</p>
                 </div>
 
-                <dl className="flex-1 space-y-1.5 text-sm">
-                  <div className="flex gap-2">
-                    <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                {/* Card body */}
+                <div className="flex-1 px-4 py-3 space-y-0 text-sm guide-card-body">
+                  <div className="flex gap-2 border-b border-gray-200 py-1.5 guide-row">
+                    <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
                       ID Pedido
-                    </dt>
-                    <dd className="font-bold text-gray-900">{order.order_code}</dd>
+                    </span>
+                    <span className="font-bold text-gray-900 guide-value">{order.order_code}</span>
                   </div>
-                  <div className="flex gap-2">
-                    <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <div className="flex gap-2 border-b border-gray-200 py-1.5 guide-row">
+                    <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
                       Cliente
-                    </dt>
-                    <dd className="font-medium text-gray-800">{order.client_name}</dd>
+                    </span>
+                    <span className="font-semibold text-gray-800 guide-value">{order.client_name}</span>
                   </div>
-                  <div className="flex gap-2">
-                    <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <div className="flex gap-2 border-b border-gray-200 py-1.5 guide-row">
+                    <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
                       Celular
-                    </dt>
-                    <dd className="text-gray-800">{order.phone}</dd>
+                    </span>
+                    <span className="text-gray-800 guide-value">{order.phone}</span>
                   </div>
-                  <div className="flex gap-2">
-                    <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <div className="flex gap-2 border-b border-gray-200 py-1.5 guide-row">
+                    <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
                       Dirección
-                    </dt>
-                    <dd className="text-gray-800">{order.address}</dd>
+                    </span>
+                    <span className="text-gray-800 guide-value">{order.address}</span>
                   </div>
                   {order.complement && (
-                    <div className="flex gap-2">
-                      <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    <div className="flex gap-2 border-b border-gray-200 py-1.5 guide-row">
+                      <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
                         Barrio
-                      </dt>
-                      <dd className="text-gray-800">{order.complement}</dd>
+                      </span>
+                      <span className="text-gray-800 guide-value">{order.complement}</span>
                     </div>
                   )}
-                  <div className="flex gap-2">
-                    <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <div className="flex gap-2 border-b border-gray-200 py-1.5 guide-row">
+                    <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
                       Referencia
-                    </dt>
-                    <dd className="text-gray-800">{order.product_ref}</dd>
+                    </span>
+                    <span className="text-gray-800 guide-value">{order.product_ref}</span>
                   </div>
                   {order.detail && (
-                    <div className="flex gap-2">
-                      <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    <div className="flex gap-2 border-b border-gray-200 py-1.5 guide-row">
+                      <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
                         Detalle
-                      </dt>
-                      <dd className="text-gray-800">{order.detail}</dd>
+                      </span>
+                      <span className="text-gray-800 guide-value">{order.detail}</span>
                     </div>
                   )}
-                  <div className="flex gap-2 pt-2 border-t-2 border-solid border-gray-300 mt-2">
-                    <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <div className="flex gap-2 items-center pt-2 mt-1 border-t-2 border-solid border-gray-400 guide-row">
+                    <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
                       Valor a cobrar
-                    </dt>
-                    <dd className="text-xl font-black text-gray-900">
+                    </span>
+                    <span className="text-xl font-black text-gray-900 guide-value guide-value-big">
                       {formatCurrency(order.value_to_collect)}
-                    </dd>
+                    </span>
                   </div>
                   {order.comment && (
-                    <div className="flex gap-2">
-                      <dt className="w-28 shrink-0 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    <div className="flex gap-2 py-1 guide-row">
+                      <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
                         Comentario
-                      </dt>
-                      <dd className="text-gray-700 italic">{order.comment}</dd>
+                      </span>
+                      <span className="text-gray-700 italic guide-value">{order.comment}</span>
                     </div>
                   )}
-                </dl>
+                </div>
 
                 {/* Card footer — pinned to bottom */}
-                <div className="mt-4 pt-2 border-t-2 border-solid border-gray-400 text-center">
-                  <p className="text-xs font-semibold text-gray-600">
+                <div className="py-2 border-t-2 border-solid border-gray-800 text-center bg-gray-50 guide-card-footer">
+                  <p className="text-xs font-bold text-gray-600">
                     Mayor Información 3203880422
                   </p>
                 </div>

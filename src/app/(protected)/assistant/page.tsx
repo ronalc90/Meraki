@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Mic, MicOff, Send, Sparkles, Check, X, Loader2, Package, ShoppingBag, Search, MapPin, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
@@ -178,11 +178,27 @@ export default function AssistantPage() {
     scrollToBottom();
   };
 
+  // Keep track of text before recording started so we can append
+  const preRecordTextRef = useRef('');
+  const wasRecordingRef = useRef(false);
+
+  // Auto-send when recording stops and there's text
+  useEffect(() => {
+    if (wasRecordingRef.current && !isRecording && input.trim()) {
+      sendMessage(input);
+    }
+    wasRecordingRef.current = isRecording;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRecording]);
+
   const startRecording = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = window as any;
     const SpeechRecognitionAPI = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SpeechRecognitionAPI) { toast.error('Navegador no soporta voz'); return; }
+
+    // Save current text so we can append
+    preRecordTextRef.current = input;
 
     const recognition = new SpeechRecognitionAPI();
     recognition.lang = 'es-CO';
@@ -197,7 +213,9 @@ export default function AssistantPage() {
         if (r.isFinal) finalT += r[0].transcript;
         else interimT = r[0].transcript;
       }
-      setInput(finalT || interimT);
+      const newText = finalT || interimT;
+      const prev = preRecordTextRef.current;
+      setInput(prev ? `${prev} ${newText}` : newText);
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onerror = (e: any) => { if (e.error !== 'no-speech') toast.error('Error de voz'); setIsRecording(false); };
@@ -220,6 +238,7 @@ export default function AssistantPage() {
       case 'add_inventory': return <Package className="w-4 h-4 text-green-500" />;
       case 'search_inventory': return <Search className="w-4 h-4 text-purple-500" />;
       case 'search_orders': return <Search className="w-4 h-4 text-orange-500" />;
+      case 'search_products': return <Search className="w-4 h-4 text-pink-500" />;
       default: return null;
     }
   };
@@ -276,6 +295,7 @@ export default function AssistantPage() {
                   {msg.action === 'add_inventory' && 'Agregar inventario'}
                   {msg.action === 'search_inventory' && 'Buscar inventario'}
                   {msg.action === 'search_orders' && 'Consultar pedidos'}
+                  {msg.action === 'search_products' && 'Buscar productos'}
                 </div>
               )}
               <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -308,14 +328,21 @@ export default function AssistantPage() {
                 <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
                   {msg.results.slice(0, 10).map((r, j) => (
                     <div key={j} className="p-2 bg-white rounded-lg text-xs border border-gray-200">
+                      {/* Inventory results */}
                       {r.model ? <span className="font-medium">{String(r.model)}</span> : null}
+                      {/* Order results */}
                       {r.client_name ? <span className="font-medium">{String(r.client_name)}</span> : null}
+                      {/* Product results */}
+                      {r.code && !r.model && !r.client_name ? <span className="font-medium font-mono text-purple-600">{String(r.code)}</span> : null}
+                      {r.name && !r.model && !r.client_name ? <span className="font-medium"> {String(r.name)}</span> : null}
                       {r.color ? <span> {String(r.color)}</span> : null}
                       {r.size ? <span> T.{String(r.size)}</span> : null}
                       {r.quantity ? <span> Cant: {String(r.quantity)}</span> : null}
                       {r.basket_location ? <span> {String(r.basket_location)}</span> : null}
+                      {r.cost && !r.value_to_collect ? <span className="ml-1 text-green-600">{formatCurrency(Number(r.cost))}</span> : null}
                       {r.value_to_collect ? <span> {formatCurrency(Number(r.value_to_collect))}</span> : null}
                       {r.delivery_status ? <span className="ml-1 text-purple-600">[{String(r.delivery_status)}]</span> : null}
+                      {r.category && !r.model ? <span className="ml-1 text-gray-400">({String(r.category)})</span> : null}
                     </div>
                   ))}
                 </div>
@@ -384,43 +411,72 @@ export default function AssistantPage() {
         </div>
       </div>
 
-      {/* Dispatch Guide Modal */}
+      {/* Dispatch Guide Modal — matches Excel template format */}
       {showGuide && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden">
+          <div className="bg-white rounded-2xl max-w-sm w-full overflow-hidden shadow-2xl">
             <div className="print-area">
-              <div className="bg-purple-700 text-white text-center py-4 px-6">
-                <h2 className="text-xl font-black">Tu Tienda Meraki</h2>
-                <p className="text-purple-200 text-sm">Guía de Envío</p>
-              </div>
-              <div className="p-5 space-y-2 text-sm">
-                {[
-                  ['ID Pedido', showGuide.order_code],
-                  ['Cliente', showGuide.client_name],
-                  ['Celular', showGuide.phone],
-                  ['Dirección', showGuide.address],
-                  ['Complemento', showGuide.complement],
-                  ['Referencia', showGuide.product_ref],
-                  ['Detalle', showGuide.detail],
-                  ['Valor', formatCurrency(Number(showGuide.value_to_collect))],
-                  ['Comentario', showGuide.comment],
-                ].filter(([, v]) => v).map(([label, value]) => (
-                  <div key={String(label)} className="flex border-b border-gray-100 py-1.5">
-                    <span className="font-semibold text-gray-500 w-28 flex-shrink-0">{String(label)}</span>
-                    <span className="text-gray-800">{String(value)}</span>
+              <div className="border-2 border-solid border-gray-800 guide-card" style={{ height: 'auto' }}>
+                {/* Header */}
+                <div className="text-center py-3 px-4 border-b-2 border-solid border-gray-800 bg-gray-50 guide-card-header">
+                  <h2 className="font-black text-xl tracking-tight text-gray-900 uppercase">
+                    Tu Tienda Meraki
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-0.5 font-medium">Guía de Envío</p>
+                </div>
+
+                {/* Fields */}
+                <div className="px-4 py-3 space-y-0 text-sm guide-card-body">
+                  {[
+                    ['ID Pedido', showGuide.order_code, true],
+                    ['Cliente', showGuide.client_name, false],
+                    ['Celular', showGuide.phone, false],
+                    ['Dirección', showGuide.address, false],
+                    ['Barrio', showGuide.complement, false],
+                    ['Referencia', showGuide.product_ref, false],
+                    ['Detalle', showGuide.detail, false],
+                  ].filter(([, v]) => v).map(([label, value, isBold]) => (
+                    <div key={String(label)} className="flex gap-2 border-b border-gray-200 py-1.5 guide-row">
+                      <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
+                        {String(label)}
+                      </span>
+                      <span className={`flex-1 guide-value ${isBold ? 'font-bold text-gray-900' : 'text-gray-800'}`}>
+                        {String(value)}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex gap-2 items-center pt-2 mt-1 border-t-2 border-solid border-gray-400 guide-row">
+                    <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
+                      Valor a cobrar
+                    </span>
+                    <span className="text-xl font-black text-gray-900 guide-value guide-value-big">
+                      {formatCurrency(Number(showGuide.value_to_collect))}
+                    </span>
                   </div>
-                ))}
-              </div>
-              <div className="text-center py-3 text-xs text-gray-500 border-t">
-                Mayor Información 3203880422
+                  {Boolean(showGuide.comment) && (
+                    <div className="flex gap-2 py-1 guide-row">
+                      <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
+                        Comentario
+                      </span>
+                      <span className="text-gray-700 italic guide-value">{String(showGuide.comment)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="py-2 border-t-2 border-solid border-gray-800 text-center bg-gray-50 guide-card-footer">
+                  <p className="text-xs font-bold text-gray-600">
+                    Mayor Información 3203880422
+                  </p>
+                </div>
               </div>
             </div>
-            <div className="flex gap-2 p-4 border-t print:hidden">
-              <button onClick={() => window.print()} className="flex-1 flex items-center justify-center gap-2 bg-purple-600 text-white rounded-xl py-2.5 font-semibold hover:bg-purple-700 transition">
-                <Printer className="w-4 h-4" /> Imprimir
-              </button>
+            <div className="flex gap-2 p-4 print:hidden">
               <button onClick={() => setShowGuide(null)} className="flex-1 bg-gray-100 text-gray-700 rounded-xl py-2.5 font-semibold hover:bg-gray-200 transition">
                 Cerrar
+              </button>
+              <button onClick={() => window.print()} className="flex-[2] flex items-center justify-center gap-2 rounded-xl py-2.5 font-bold text-white shadow-md hover:-translate-y-0.5 transition-all" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #9061f9 100%)' }}>
+                <Printer className="w-4 h-4" /> Imprimir Guía
               </button>
             </div>
           </div>
