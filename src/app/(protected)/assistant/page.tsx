@@ -225,7 +225,7 @@ export default function AssistantPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-80px)] md:h-[calc(100vh-20px)] max-w-2xl mx-auto">
+    <div className="flex flex-col h-[calc(100dvh-96px)] md:h-[calc(100dvh-48px)] max-w-2xl mx-auto">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-100">
         <div className="flex items-center gap-2">
@@ -353,7 +353,7 @@ export default function AssistantPage() {
       )}
 
       {/* Input area */}
-      <div className="border-t border-gray-200 p-3 bg-white mb-16 md:mb-0">
+      <div className="border-t border-gray-200 p-3 bg-white">
         <div className="flex items-end gap-2">
           <button
             onClick={isRecording ? stopRecording : startRecording}

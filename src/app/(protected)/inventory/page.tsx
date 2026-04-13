@@ -347,7 +347,7 @@ export default function InventoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 pb-32 md:pb-20">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-4 shadow-sm">
         <div className="mx-auto max-w-6xl">
@@ -610,7 +610,7 @@ export default function InventoryPage() {
       </div>
 
       {/* Summary bar */}
-      <div className="fixed bottom-0 inset-x-0 bg-white border-t border-gray-100 px-4 py-3 shadow-lg">
+      <div className="fixed bottom-16 md:bottom-0 inset-x-0 bg-white border-t border-gray-100 px-4 py-3 shadow-lg">
         <div className="mx-auto max-w-6xl flex items-center justify-between text-sm">
           <div className="flex items-center gap-2 text-gray-600">
             <Layers className="h-4 w-4" style={{ color: '#7c3aed' }} />

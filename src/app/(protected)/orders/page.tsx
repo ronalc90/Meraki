@@ -25,6 +25,7 @@ const MONTH_NAMES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ]
 const DAY_NAMES_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+const DAY_NAMES_MOBILE = ['D', 'L', 'M', 'M', 'J', 'V', 'S']
 
 function SupabaseBanner() {
   return (
@@ -260,12 +261,13 @@ export default function OrdersPage({
         <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
           {/* Day headers */}
           <div className="grid grid-cols-7 border-b border-gray-100">
-            {DAY_NAMES_SHORT.map((d) => (
+            {DAY_NAMES_SHORT.map((d, i) => (
               <div
                 key={d}
                 className="py-2.5 text-center text-xs font-semibold text-gray-500"
               >
-                {d}
+                <span className="md:hidden">{DAY_NAMES_MOBILE[i]}</span>
+                <span className="hidden md:inline">{d}</span>
               </div>
             ))}
           </div>
@@ -274,7 +276,7 @@ export default function OrdersPage({
           <div className="grid grid-cols-7">
             {/* Empty padding cells */}
             {Array.from({ length: firstDayOfWeek }).map((_, i) => (
-              <div key={`pad-${i}`} className="border-b border-r border-gray-50 min-h-[80px]" />
+              <div key={`pad-${i}`} className="border-b border-r border-gray-50 min-h-[56px] md:min-h-[80px]" />
             ))}
 
             {days.map((day) => {
@@ -293,7 +295,7 @@ export default function OrdersPage({
                   key={dateStr}
                   onClick={() => navigateToDay(dateStr)}
                   className={cn(
-                    'relative flex min-h-[80px] flex-col items-start gap-1 border-b p-2 text-left transition-all hover:z-10 hover:shadow-md',
+                    'relative flex min-h-[56px] md:min-h-[80px] flex-col items-start gap-1 border-b p-1.5 md:p-2 text-left transition-all hover:z-10 hover:shadow-md',
                     isLastCol ? 'border-r-0' : 'border-r',
                     'border-gray-100',
                     isToday && 'bg-purple-50',
@@ -314,11 +316,12 @@ export default function OrdersPage({
 
                   {hasOrders && (
                     <>
-                      <span className="text-xs font-semibold text-emerald-600">
-                        {dayOrders.length} {dayOrders.length === 1 ? 'pedido' : 'pedidos'}
+                      <span className="text-[10px] md:text-xs font-semibold text-emerald-600">
+                        <span className="md:hidden">{dayOrders.length}</span>
+                        <span className="hidden md:inline">{dayOrders.length} {dayOrders.length === 1 ? 'pedido' : 'pedidos'}</span>
                       </span>
                       {dayRevenue > 0 && (
-                        <span className="text-[10px] text-gray-500 leading-tight">
+                        <span className="hidden md:inline text-[10px] text-gray-500 leading-tight">
                           {formatCurrency(dayRevenue)}
                         </span>
                       )}

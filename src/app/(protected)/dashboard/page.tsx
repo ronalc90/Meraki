@@ -66,8 +66,8 @@ function KPICard({ label, value, icon, color, sub, highlight }: KPICardProps) {
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-xs font-medium text-gray-500">{label}</p>
+        <div className="min-w-0">
+          <p className="truncate text-xs font-medium text-gray-500">{label}</p>
           <p
             className={cn('text-2xl font-black mt-0.5', highlight && 'text-3xl')}
             style={{ color: highlight ? '#7c3aed' : color }}
@@ -364,8 +364,9 @@ export default function DashboardPage() {
 
             {/* Daily revenue chart */}
             <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-4">
-              <h2 className="text-sm font-semibold text-gray-700 mb-4">Recaudo por día</h2>
+              <h2 className="text-sm font-semibold text-gray-700 mb-4 truncate">Recaudo por día</h2>
               {chartData.some((d) => d.revenue > 0) ? (
+                <div className="overflow-x-auto">
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
@@ -394,6 +395,7 @@ export default function DashboardPage() {
                     <Bar dataKey="revenue" fill="#7c3aed" radius={[4, 4, 0, 0]} maxBarSize={30} />
                   </BarChart>
                 </ResponsiveContainer>
+                </div>
               ) : (
                 <div className="flex h-48 items-center justify-center text-sm text-gray-400">
                   Sin datos de recaudo para este mes

@@ -101,13 +101,12 @@ const STATUS_COLORS: Record<string, string> = {
   Cancelado: 'bg-red-100 text-red-600',
 }
 
-interface OrderRowProps {
+interface OrderRowBaseProps {
   order: Order
   onUpdate: (id: number, changes: Partial<Order>) => Promise<void>
 }
 
-function OrderRow({ order, onUpdate }: OrderRowProps) {
-  const [expanded, setExpanded] = useState(false)
+function useOrderRowState(order: Order, onUpdate: OrderRowBaseProps['onUpdate']) {
   const [saving, setSaving] = useState(false)
 
   async function handleChange<K extends keyof Order>(field: K, value: Order[K]) {
@@ -119,185 +118,194 @@ function OrderRow({ order, onUpdate }: OrderRowProps) {
     }
   }
 
+  return { saving, handleChange }
+}
+
+function OrderTableRow({ order, onUpdate }: OrderRowBaseProps) {
+  const { saving, handleChange } = useOrderRowState(order, onUpdate)
+
   return (
-    <>
-      {/* Desktop row */}
-      <tr className="hidden border-b border-gray-50 hover:bg-gray-50/60 transition-colors md:table-row">
-        <td className="px-4 py-3 text-xs font-mono text-purple-600 font-medium whitespace-nowrap">
-          {order.order_code}
-        </td>
-        <td className="px-4 py-3">
-          <div className="font-medium text-gray-800 text-sm leading-tight">{order.client_name}</div>
-          <div className="text-xs text-gray-400">{order.phone}</div>
-        </td>
-        <td className="px-4 py-3 text-xs text-gray-600 max-w-[140px] truncate">{order.address}</td>
-        <td className="px-4 py-3 text-xs text-gray-600 max-w-[160px]">
-          <span className="line-clamp-2">{order.detail}</span>
-        </td>
-        <td className="px-4 py-3 text-sm font-semibold text-gray-800 whitespace-nowrap">
-          {formatCurrency(order.value_to_collect)}
-        </td>
-        <td className="px-4 py-3">
-          <select
-            value={order.delivery_status}
-            onChange={(e) =>
-              handleChange('delivery_status', e.target.value as Order['delivery_status'])
-            }
-            disabled={saving}
-            className={cn(
-              'rounded-lg border-0 px-2 py-1 text-xs font-medium outline-none cursor-pointer disabled:opacity-60',
-              STATUS_COLORS[order.delivery_status] ?? 'bg-gray-100 text-gray-600',
-            )}
-          >
-            {DELIVERY_STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </td>
-        <td className="px-4 py-3">
-          <select
-            value={order.delivery_type}
-            onChange={(e) =>
-              handleChange('delivery_type', e.target.value as Order['delivery_type'])
-            }
-            disabled={saving}
-            className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs outline-none cursor-pointer disabled:opacity-60"
-          >
-            {DELIVERY_TYPE_OPTIONS.map((t) => (
-              <option key={t} value={t}>
-                {t || '—'}
-              </option>
-            ))}
-          </select>
-        </td>
-        <td className="px-4 py-3">
-          <select
-            value={order.vendor}
-            onChange={(e) => handleChange('vendor', e.target.value)}
-            disabled={saving}
-            className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs outline-none cursor-pointer disabled:opacity-60"
-          >
-            {VENDOR_OPTIONS.map((v) => (
-              <option key={v} value={v}>
-                {v || '—'}
-              </option>
-            ))}
-          </select>
-        </td>
-      </tr>
-
-      {/* Mobile card */}
-      <div className="md:hidden rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-        <button
-          className="w-full flex items-start justify-between gap-3 p-4"
-          onClick={() => setExpanded((e) => !e)}
+    <tr className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors">
+      <td className="px-4 py-3 text-xs font-mono text-purple-600 font-medium whitespace-nowrap">
+        {order.order_code}
+      </td>
+      <td className="px-4 py-3">
+        <div className="font-medium text-gray-800 text-sm leading-tight">{order.client_name}</div>
+        <div className="text-xs text-gray-400">{order.phone}</div>
+      </td>
+      <td className="px-4 py-3 text-xs text-gray-600 max-w-[140px] truncate">{order.address}</td>
+      <td className="px-4 py-3 text-xs text-gray-600 max-w-[160px]">
+        <span className="line-clamp-2">{order.detail}</span>
+      </td>
+      <td className="px-4 py-3 text-sm font-semibold text-gray-800 whitespace-nowrap">
+        {formatCurrency(order.value_to_collect)}
+      </td>
+      <td className="px-4 py-3">
+        <select
+          value={order.delivery_status}
+          onChange={(e) =>
+            handleChange('delivery_status', e.target.value as Order['delivery_status'])
+          }
+          disabled={saving}
+          className={cn(
+            'rounded-lg border-0 px-2 py-1 text-xs font-medium outline-none cursor-pointer disabled:opacity-60',
+            STATUS_COLORS[order.delivery_status] ?? 'bg-gray-100 text-gray-600',
+          )}
         >
-          <div className="flex-1 text-left min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-xs text-purple-600">{order.order_code}</span>
-              <span
-                className={cn(
-                  'rounded-full px-2 py-0.5 text-[10px] font-medium',
-                  STATUS_COLORS[order.delivery_status] ?? 'bg-gray-100 text-gray-600',
-                )}
+          {DELIVERY_STATUS_OPTIONS.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td className="px-4 py-3">
+        <select
+          value={order.delivery_type}
+          onChange={(e) =>
+            handleChange('delivery_type', e.target.value as Order['delivery_type'])
+          }
+          disabled={saving}
+          className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs outline-none cursor-pointer disabled:opacity-60"
+        >
+          {DELIVERY_TYPE_OPTIONS.map((t) => (
+            <option key={t} value={t}>
+              {t || '—'}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td className="px-4 py-3">
+        <select
+          value={order.vendor}
+          onChange={(e) => handleChange('vendor', e.target.value)}
+          disabled={saving}
+          className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs outline-none cursor-pointer disabled:opacity-60"
+        >
+          {VENDOR_OPTIONS.map((v) => (
+            <option key={v} value={v}>
+              {v || '—'}
+            </option>
+          ))}
+        </select>
+      </td>
+    </tr>
+  )
+}
+
+function OrderMobileCard({ order, onUpdate }: OrderRowBaseProps) {
+  const [expanded, setExpanded] = useState(false)
+  const { saving, handleChange } = useOrderRowState(order, onUpdate)
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+      <button
+        className="w-full flex items-start justify-between gap-3 p-4"
+        onClick={() => setExpanded((e) => !e)}
+      >
+        <div className="flex-1 text-left min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs text-purple-600">{order.order_code}</span>
+            <span
+              className={cn(
+                'rounded-full px-2 py-0.5 text-[10px] font-medium',
+                STATUS_COLORS[order.delivery_status] ?? 'bg-gray-100 text-gray-600',
+              )}
+            >
+              {order.delivery_status}
+            </span>
+          </div>
+          <p className="mt-0.5 font-semibold text-gray-800 text-sm">{order.client_name}</p>
+          <p className="text-xs text-gray-500 truncate">{order.address}</p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="font-bold text-gray-900">{formatCurrency(order.value_to_collect)}</p>
+          <p className="text-xs text-gray-400">{order.vendor || '—'}</p>
+        </div>
+        <span className="shrink-0 self-center text-gray-400">
+          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-gray-100 px-4 pb-4 pt-3 space-y-3">
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div>
+              <p className="text-gray-500">Teléfono</p>
+              <p className="font-medium text-gray-800">{order.phone}</p>
+            </div>
+            <div>
+              <p className="text-gray-500">Ciudad</p>
+              <p className="font-medium text-gray-800">{order.city || '—'}</p>
+            </div>
+            <div className="col-span-2">
+              <p className="text-gray-500">Detalle</p>
+              <p className="font-medium text-gray-800">{order.detail || '—'}</p>
+            </div>
+            <div className="col-span-2">
+              <p className="text-gray-500">Comentario</p>
+              <p className="font-medium text-gray-800">{order.comment || '—'}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div className="space-y-0.5">
+              <label className="block text-[10px] text-gray-500">Estado</label>
+              <select
+                value={order.delivery_status}
+                onChange={(e) =>
+                  handleChange('delivery_status', e.target.value as Order['delivery_status'])
+                }
+                disabled={saving}
+                className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs outline-none"
               >
-                {order.delivery_status}
-              </span>
+                {DELIVERY_STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
             </div>
-            <p className="mt-0.5 font-semibold text-gray-800 text-sm">{order.client_name}</p>
-            <p className="text-xs text-gray-500 truncate">{order.address}</p>
-          </div>
-          <div className="shrink-0 text-right">
-            <p className="font-bold text-gray-900">{formatCurrency(order.value_to_collect)}</p>
-            <p className="text-xs text-gray-400">{order.vendor || '—'}</p>
-          </div>
-          <span className="shrink-0 self-center text-gray-400">
-            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </span>
-        </button>
-
-        {expanded && (
-          <div className="border-t border-gray-100 px-4 pb-4 pt-3 space-y-3">
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div>
-                <p className="text-gray-500">Teléfono</p>
-                <p className="font-medium text-gray-800">{order.phone}</p>
-              </div>
-              <div>
-                <p className="text-gray-500">Ciudad</p>
-                <p className="font-medium text-gray-800">{order.city || '—'}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-gray-500">Detalle</p>
-                <p className="font-medium text-gray-800">{order.detail || '—'}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-gray-500">Comentario</p>
-                <p className="font-medium text-gray-800">{order.comment || '—'}</p>
-              </div>
+            <div className="space-y-0.5">
+              <label className="block text-[10px] text-gray-500">Tipo</label>
+              <select
+                value={order.delivery_type}
+                onChange={(e) =>
+                  handleChange('delivery_type', e.target.value as Order['delivery_type'])
+                }
+                disabled={saving}
+                className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs outline-none"
+              >
+                {DELIVERY_TYPE_OPTIONS.map((t) => (
+                  <option key={t} value={t}>
+                    {t || '—'}
+                  </option>
+                ))}
+              </select>
             </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <div className="space-y-0.5">
-                <label className="block text-[10px] text-gray-500">Estado</label>
-                <select
-                  value={order.delivery_status}
-                  onChange={(e) =>
-                    handleChange('delivery_status', e.target.value as Order['delivery_status'])
-                  }
-                  disabled={saving}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs outline-none"
-                >
-                  {DELIVERY_STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-0.5">
-                <label className="block text-[10px] text-gray-500">Tipo</label>
-                <select
-                  value={order.delivery_type}
-                  onChange={(e) =>
-                    handleChange('delivery_type', e.target.value as Order['delivery_type'])
-                  }
-                  disabled={saving}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs outline-none"
-                >
-                  {DELIVERY_TYPE_OPTIONS.map((t) => (
-                    <option key={t} value={t}>
-                      {t || '—'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-0.5">
-                <label className="block text-[10px] text-gray-500">Vendedora</label>
-                <select
-                  value={order.vendor}
-                  onChange={(e) => handleChange('vendor', e.target.value)}
-                  disabled={saving}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs outline-none"
-                >
-                  {VENDOR_OPTIONS.map((v) => (
-                    <option key={v} value={v}>
-                      {v || '—'}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="space-y-0.5">
+              <label className="block text-[10px] text-gray-500">Vendedora</label>
+              <select
+                value={order.vendor}
+                onChange={(e) => handleChange('vendor', e.target.value)}
+                disabled={saving}
+                className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs outline-none"
+              >
+                {VENDOR_OPTIONS.map((v) => (
+                  <option key={v} value={v}>
+                    {v || '—'}
+                  </option>
+                ))}
+              </select>
             </div>
-
-            {saving && (
-              <p className="text-xs text-purple-500 text-center">Guardando...</p>
-            )}
           </div>
-        )}
-      </div>
-    </>
+
+          {saving && (
+            <p className="text-xs text-purple-500 text-center">Guardando...</p>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -484,7 +492,7 @@ export default function DailyOrdersPage({
               </thead>
               <tbody>
                 {orders.map((order) => (
-                  <OrderRow key={order.id} order={order} onUpdate={handleUpdateOrder} />
+                  <OrderTableRow key={order.id} order={order} onUpdate={handleUpdateOrder} />
                 ))}
               </tbody>
             </table>
@@ -493,7 +501,7 @@ export default function DailyOrdersPage({
           {/* Mobile cards */}
           <div className="flex flex-col gap-3 md:hidden">
             {orders.map((order) => (
-              <OrderRow key={order.id} order={order} onUpdate={handleUpdateOrder} />
+              <OrderMobileCard key={order.id} order={order} onUpdate={handleUpdateOrder} />
             ))}
           </div>
         </>

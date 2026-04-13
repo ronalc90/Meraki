@@ -573,7 +573,7 @@ export default function DispatchPage() {
 
       {/* Bottom action bar — toggle between Guías / Ruta */}
       {selected.size > 0 && (
-        <div className="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 shadow-lg px-4 py-3 z-10">
+        <div className="fixed bottom-16 md:bottom-0 inset-x-0 bg-white border-t border-gray-200 shadow-lg px-4 py-3 z-10">
           <div className="mx-auto max-w-3xl">
             <div className="flex items-center justify-between gap-3 mb-3">
               <div className="text-sm text-gray-600">
@@ -591,7 +591,7 @@ export default function DispatchPage() {
               <button
                 onClick={() => setActiveView('ruta')}
                 className={cn(
-                  'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors',
+                  'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-semibold transition-colors',
                   activeView === 'ruta'
                     ? 'text-white'
                     : 'text-purple-700 hover:bg-purple-50'
@@ -604,7 +604,7 @@ export default function DispatchPage() {
               <button
                 onClick={() => setActiveView('guias')}
                 className={cn(
-                  'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors border-l border-purple-300',
+                  'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-semibold transition-colors border-l border-purple-300',
                   activeView === 'guias'
                     ? 'text-white'
                     : 'text-purple-700 hover:bg-purple-50'
