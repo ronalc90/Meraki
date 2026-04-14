@@ -5,6 +5,7 @@ export interface Product {
   cost: number;
   category: string;
   active: boolean;
+  image_url?: string;
   created_at: string;
 }
 
@@ -51,6 +52,7 @@ export interface InventoryItem {
   status: 'Bueno' | 'Malo';
   observations: string;
   verified: boolean;
+  image_url?: string;
   created_at: string;
 }
 

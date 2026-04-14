@@ -224,6 +224,7 @@ Para BUSCAR GASTOS:
 Reglas:
 - SIEMPRE needs_confirmation=true para acciones que modifican datos (crear, actualizar, eliminar)
 - Para CREAR PEDIDO: dirección es OBLIGATORIA. Si falta, usa action="chat" y pide dirección.
+- FORMATO DE DIRECCIONES: Cuando el usuario dicta por voz, convierte: "número" → "N°" o "#", "carrera" → "Cr", "calle" → "Cll", "avenida" → "Av", "diagonal" → "Dg", "transversal" → "Tv". Ejemplo: "carrera 15 número 80 guión 25" → "Cr 15 #80-25"
 - Para CREAR PEDIDO: incluye la cantidad en el campo "detail" (ej: "2 pantuflas vaquita blanca talla 38")
 - Para CREAR PEDIDO: incluye "quantity" en data (número de unidades, default 1)
 - Talla: "38" → "38-39", "36" → "36-37", "40" → "40-41"

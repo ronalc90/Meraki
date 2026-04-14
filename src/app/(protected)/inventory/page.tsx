@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils'
 import { downloadExcel } from '@/lib/export'
 import { useUser } from '@/lib/UserContext'
 import { isOwnerSupported } from '@/lib/db'
+import PhotoCapture from '@/components/shared/PhotoCapture'
 
 const CATEGORIES = ['Pantuflas', 'Maxisacos', 'Accesorios', 'Otro']
 const COLORS = ['Negro', 'Blanco', 'Gris', 'Beige', 'Rosado', 'Azul', 'Verde', 'Rojo', 'Morado', 'Multicolor']
@@ -42,6 +43,7 @@ const EMPTY_FORM: Omit<InventoryItem, 'id' | 'created_at'> = {
   status: 'Bueno',
   observations: '',
   verified: false,
+  image_url: '',
 }
 
 interface ModalProps {
@@ -67,6 +69,7 @@ function InventoryModal({ item, onClose, onSave, saving }: ModalProps) {
           status: item.status ?? 'Bueno',
           observations: item.observations ?? '',
           verified: item.verified ?? false,
+          image_url: item.image_url ?? '',
         }
       : { ...EMPTY_FORM }
   )
@@ -207,6 +210,15 @@ function InventoryModal({ item, onClose, onSave, saving }: ModalProps) {
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
               value={form.observations}
               onChange={(e) => set('observations', e.target.value)}
+            />
+          </div>
+
+          <div className="col-span-2">
+            <label className="mb-1 block text-xs font-medium text-gray-600">Foto del producto</label>
+            <PhotoCapture
+              currentUrl={form.image_url}
+              onPhotoReady={(url) => set('image_url', url)}
+              compact={!!form.image_url}
             />
           </div>
 
@@ -559,6 +571,9 @@ export default function InventoryPage() {
             <div className="md:hidden space-y-3">
               {filtered.map((item) => (
                 <div key={item.id} className="rounded-2xl bg-white p-4 shadow-sm border border-gray-100">
+                  {item.image_url && (
+                    <img src={item.image_url} alt={item.model} className="w-full h-32 object-cover rounded-xl mb-3" />
+                  )}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
