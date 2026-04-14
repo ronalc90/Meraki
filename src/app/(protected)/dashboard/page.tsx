@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   ShoppingBag,
   Banknote,
@@ -127,6 +128,7 @@ interface ChartDatum {
 
 export default function DashboardPage() {
   const owner = useUser()
+  const router = useRouter()
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
@@ -497,7 +499,11 @@ export default function DashboardPage() {
                   {recentOrders.map((order) => {
                     const s = STATUS_STYLES[order.delivery_status]
                     return (
-                      <div key={order.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                      <button
+                        key={order.id}
+                        onClick={() => router.push(`/orders/daily/${order.order_date}`)}
+                        className="flex items-center justify-between gap-3 px-4 py-3 w-full text-left hover:bg-gray-50 transition-colors active:bg-gray-100"
+                      >
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-gray-900 text-sm truncate">{order.client_name}</p>
                           <p className="text-xs text-gray-400 truncate">
@@ -512,7 +518,7 @@ export default function DashboardPage() {
                             {s.label}
                           </span>
                         </div>
-                      </div>
+                      </button>
                     )
                   })}
                 </div>
