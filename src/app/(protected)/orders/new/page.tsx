@@ -228,9 +228,9 @@ export default function NewOrderPage({
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className={`mx-auto max-w-3xl ${tab === 'manual' ? 'space-y-6' : 'flex flex-col h-[calc(100dvh-6rem)] md:h-auto md:space-y-6'}`}>
       {/* Header */}
-      <div>
+      <div className={tab !== 'manual' ? 'shrink-0' : ''}>
         <button
           onClick={() => router.back()}
           className="mb-1 text-sm text-gray-400 hover:text-gray-600 transition-colors"
@@ -243,7 +243,7 @@ export default function NewOrderPage({
       {!supabaseOk && <SupabaseBanner />}
 
       {/* Tab toggle */}
-      <div className="flex gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1">
+      <div className={`flex gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 ${tab !== 'manual' ? 'shrink-0 mt-4' : ''}`}>
         <button
           type="button"
           onClick={() => setTab('ai')}
@@ -284,7 +284,7 @@ export default function NewOrderPage({
 
       {/* AI Tab — saves immediately and shows dispatch guide */}
       {tab === 'ai' && (
-        <div className="rounded-2xl border border-purple-100 bg-white overflow-hidden shadow-sm">
+        <div className="rounded-2xl border border-purple-100 bg-white overflow-hidden shadow-sm flex-1 min-h-0 mt-4 md:mt-0 flex flex-col">
           <AIOrderInput onOrderConfirmed={async (parsed: ParsedOrder) => {
             setSaving(true);
             try {
@@ -362,7 +362,7 @@ export default function NewOrderPage({
 
       {/* Inventory AI Tab */}
       {tab === 'inventory' && (
-        <div className="rounded-2xl border border-purple-100 bg-white overflow-hidden shadow-sm">
+        <div className="rounded-2xl border border-purple-100 bg-white overflow-hidden shadow-sm flex-1 min-h-0 mt-4 md:mt-0 flex flex-col">
           <AIInventoryInput onItemsConfirmed={async (items) => {
             setSaving(true);
             try {
