@@ -271,37 +271,37 @@ export default function AssistantPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-96px)] md:h-[calc(100dvh-48px)] max-w-2xl mx-auto">
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-100">
+    <div className="flex flex-col -mx-4 -mt-4 -mb-4 md:mx-auto md:mt-0 md:mb-0 max-w-2xl h-[calc(100dvh-5rem)] md:h-[calc(100dvh-3rem)] overflow-hidden">
+      {/* Header — compact on mobile */}
+      <div className="px-3 py-2 border-b border-gray-100 shrink-0 bg-white">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-white" />
+          <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center shrink-0">
+            <Sparkles className="w-4 h-4 md:w-5 md:h-5 text-white" />
           </div>
-          <div>
-            <h1 className="font-bold text-lg">Asistente Meraki</h1>
-            <p className="text-xs text-gray-500">Pedidos, inventario, consultas — todo por voz o texto</p>
+          <div className="min-w-0">
+            <h1 className="font-bold text-sm md:text-lg leading-tight">Asistente Meraki</h1>
+            <p className="text-[10px] md:text-xs text-gray-500 truncate">Pedidos, inventario, consultas</p>
           </div>
         </div>
       </div>
 
       {/* Chat area */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3 min-h-0">
         {messages.length === 0 && (
-          <div className="text-center py-12 text-gray-400">
-            <Sparkles className="w-16 h-16 mx-auto mb-4 text-purple-200" />
-            <p className="text-lg font-semibold text-gray-500 mb-2">Hola! Soy tu asistente</p>
-            <p className="text-sm mb-6">Puedo ayudarte con todo. Habla o escribe:</p>
-            <div className="grid grid-cols-1 gap-2 max-w-xs mx-auto text-left">
+          <div className="text-center py-6 md:py-12 text-gray-400">
+            <Sparkles className="w-10 h-10 md:w-16 md:h-16 mx-auto mb-3 text-purple-200" />
+            <p className="text-base md:text-lg font-semibold text-gray-500 mb-1">Hola! Soy tu asistente</p>
+            <p className="text-xs md:text-sm mb-4">Habla o escribe:</p>
+            <div className="grid grid-cols-1 gap-1.5 max-w-xs mx-auto text-left">
               {[
-                { icon: <ShoppingBag className="w-4 h-4 text-blue-500" />, text: '"Carlos 3203436512 Calle 80A clásica miel $60.000"' },
-                { icon: <Package className="w-4 h-4 text-green-500" />, text: '"Tengo 10 vaquitas blancas talla 38 en C015"' },
-                { icon: <Search className="w-4 h-4 text-purple-500" />, text: '"¿Dónde están las pantuflas de Stitch?"' },
-                { icon: <MapPin className="w-4 h-4 text-orange-500" />, text: '"¿Cuántos pedidos hay hoy?"' },
+                { icon: <ShoppingBag className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />, text: '"Carlos 3203436512 Calle 80A clásica miel $60.000"' },
+                { icon: <Package className="w-3.5 h-3.5 text-green-500 shrink-0 mt-0.5" />, text: '"Tengo 10 vaquitas talla 38 en C015"' },
+                { icon: <Search className="w-3.5 h-3.5 text-purple-500 shrink-0 mt-0.5" />, text: '"¿Dónde están las de Stitch?"' },
+                { icon: <MapPin className="w-3.5 h-3.5 text-orange-500 shrink-0 mt-0.5" />, text: '"¿Cuántos pedidos hay hoy?"' },
               ].map((ex, i) => (
-                <button key={i} onClick={() => setInput(ex.text.replace(/"/g, ''))} className="flex items-start gap-2 p-2 rounded-lg hover:bg-gray-50 text-xs text-gray-600 text-left transition">
+                <button key={i} onClick={() => setInput(ex.text.replace(/"/g, ''))} className="flex items-start gap-2 p-1.5 rounded-lg hover:bg-gray-50 text-xs text-gray-600 text-left transition">
                   {ex.icon}
-                  <span>{ex.text}</span>
+                  <span className="leading-snug">{ex.text}</span>
                 </button>
               ))}
             </div>
@@ -310,7 +310,7 @@ export default function AssistantPage() {
 
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
+            <div className={`max-w-[85%] rounded-2xl px-3 py-2 md:px-4 md:py-2.5 text-[13px] md:text-sm ${
               msg.role === 'user'
                 ? 'bg-purple-600 text-white rounded-br-md'
                 : 'bg-gray-100 text-gray-800 rounded-bl-md'
@@ -394,27 +394,27 @@ export default function AssistantPage() {
 
       {/* Confirmation bar */}
       {pendingAction && (
-        <div className="mx-4 mb-2 p-3 bg-yellow-50 border border-yellow-200 rounded-xl animate-fadeIn">
-          <p className="text-sm font-semibold text-yellow-800 mb-2">¿Confirmar esta acción?</p>
+        <div className="mx-2 md:mx-4 mb-1 p-2 md:p-3 bg-yellow-50 border border-yellow-200 rounded-xl animate-fadeIn shrink-0">
+          <p className="text-xs md:text-sm font-semibold text-yellow-800 mb-1.5">¿Confirmar esta acción?</p>
           <div className="flex gap-2">
-            <button onClick={confirmAction} disabled={isLoading} className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-green-700 transition disabled:opacity-50">
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Confirmar
+            <button onClick={confirmAction} disabled={isLoading} className="flex-1 flex items-center justify-center gap-1 bg-green-600 text-white rounded-lg py-1.5 md:py-2 text-xs md:text-sm font-medium hover:bg-green-700 transition disabled:opacity-50">
+              {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Confirmar
             </button>
-            <button onClick={rejectAction} className="flex-1 flex items-center justify-center gap-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg py-2 text-sm font-medium hover:bg-gray-50 transition">
-              <X className="w-4 h-4" /> Corregir
+            <button onClick={rejectAction} className="flex-1 flex items-center justify-center gap-1 bg-white border border-gray-300 text-gray-700 rounded-lg py-1.5 md:py-2 text-xs md:text-sm font-medium hover:bg-gray-50 transition">
+              <X className="w-3.5 h-3.5" /> Corregir
             </button>
           </div>
         </div>
       )}
 
-      {/* Input area */}
-      <div className="border-t border-gray-200 p-3 bg-white">
+      {/* Input area — safe-area-aware for iOS */}
+      <div className="border-t border-gray-200 px-3 pt-2 pb-2 bg-white shrink-0" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
         <div className="flex items-end gap-2">
           <button
             onClick={isRecording ? stopRecording : startRecording}
             disabled={isLoading}
-            className={`relative flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center transition ${
-              isRecording ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            className={`relative flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition ${
+              isRecording ? 'bg-red-500 text-white recording-pulse' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
             {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
@@ -425,14 +425,14 @@ export default function AssistantPage() {
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
             placeholder="Pedido, inventario, consulta..."
             rows={1}
-            className="flex-1 resize-none rounded-xl border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent max-h-24"
-            style={{ minHeight: '44px' }}
+            className="flex-1 resize-none rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent max-h-20"
+            style={{ minHeight: '40px' }}
             disabled={isLoading}
           />
           <button
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || isLoading}
-            className="flex-shrink-0 w-11 h-11 rounded-full bg-purple-600 text-white flex items-center justify-center hover:bg-purple-700 transition disabled:opacity-40"
+            className="flex-shrink-0 w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center hover:bg-purple-700 transition disabled:opacity-40"
           >
             <Send className="w-5 h-5" />
           </button>
@@ -441,8 +441,8 @@ export default function AssistantPage() {
 
       {/* Dispatch Guide Modal — matches Excel template exactly */}
       {showGuide && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-xs w-full overflow-hidden shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4">
+          <div className="bg-white rounded-t-2xl md:rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl max-h-[90dvh] overflow-y-auto">
             <div className="print-area p-3">
               <GuideCard
                 order={{
@@ -458,11 +458,11 @@ export default function AssistantPage() {
                 }}
               />
             </div>
-            <div className="flex gap-2 p-4 print:hidden">
-              <button onClick={() => setShowGuide(null)} className="flex-1 bg-gray-100 text-gray-700 rounded-xl py-2.5 font-semibold hover:bg-gray-200 transition">
+            <div className="flex gap-2 p-3 md:p-4 print:hidden" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+              <button onClick={() => setShowGuide(null)} className="flex-1 bg-gray-100 text-gray-700 rounded-xl py-2.5 text-sm font-semibold hover:bg-gray-200 transition">
                 Cerrar
               </button>
-              <button onClick={() => window.print()} className="flex-[2] flex items-center justify-center gap-2 rounded-xl py-2.5 font-bold text-white shadow-md hover:-translate-y-0.5 transition-all" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #9061f9 100%)' }}>
+              <button onClick={() => window.print()} className="flex-[2] flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold text-white shadow-md hover:-translate-y-0.5 transition-all" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #9061f9 100%)' }}>
                 <Printer className="w-4 h-4" /> Imprimir
               </button>
             </div>
