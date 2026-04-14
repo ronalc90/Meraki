@@ -144,11 +144,31 @@ export default function AssistantPage() {
         const { error } = await supabase.from('orders').insert(payload);
         if (error) throw error;
 
+        // Descontar stock del inventario si hay detalle del producto
+        const detail = String(orderData.detail || '').toLowerCase();
+        const productRef = String(orderData.product_ref || '').toLowerCase();
+        if (detail || productRef) {
+          const searchTerm = detail || productRef;
+          let invQuery = supabase.from('inventory').select('*').eq('status', 'Bueno').gt('quantity', 0);
+          if (hasOwner) invQuery = invQuery.eq('owner', owner);
+          const { data: invItems } = await invQuery;
+          if (invItems && invItems.length > 0) {
+            const match = invItems.find(i =>
+              searchTerm.includes(i.model.toLowerCase()) ||
+              i.model.toLowerCase().includes(searchTerm.split(' ')[0])
+            );
+            if (match) {
+              const newQty = Math.max(0, match.quantity - 1);
+              await supabase.from('inventory').update({ quantity: newQty }).eq('id', match.id);
+            }
+          }
+        }
+
         setShowGuide(payload);
         toast.success('Pedido guardado');
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: `Pedido #${orderCode} guardado para ${orderData.client_name}. Puedes imprimir la guía.`,
+          content: `Pedido #${orderCode} guardado para ${orderData.client_name}. Stock actualizado. Puedes imprimir la guía.`,
           confirmed: true,
         }]);
       }
@@ -182,6 +202,148 @@ export default function AssistantPage() {
         setMessages(prev => [...prev, {
           role: 'assistant',
           content: `Listo, ${items.length} item(s) agregados al inventario.`,
+          confirmed: true,
+        }]);
+      }
+
+      if (pendingAction.action === 'mark_defective') {
+        const defData = pendingAction.data as Record<string, unknown>;
+        const model = String(defData.model || '').toLowerCase();
+        const qty = Number(defData.quantity) || 1;
+
+        let invQuery = supabase.from('inventory').select('*').eq('status', 'Bueno').gt('quantity', 0);
+        if (hasOwner) invQuery = invQuery.eq('owner', owner);
+        if (model) invQuery = invQuery.ilike('model', `%${model}%`);
+        if (defData.color) invQuery = invQuery.ilike('color', `%${String(defData.color)}%`);
+        if (defData.size) invQuery = invQuery.ilike('size', `%${String(defData.size)}%`);
+        const { data: invItems } = await invQuery.limit(1);
+
+        if (invItems && invItems.length > 0) {
+          const item = invItems[0];
+          const newQty = Math.max(0, item.quantity - qty);
+          await supabase.from('inventory').update({ quantity: newQty }).eq('id', item.id);
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const defPayload: any = {
+            model: item.model,
+            category: item.category,
+            product_id: item.product_id,
+            color: item.color,
+            size: item.size,
+            quantity: qty,
+            basket_location: item.basket_location,
+            type: item.type,
+            observations: String(defData.observations || 'Marcado como defectuoso'),
+            status: 'Malo',
+            verified: false,
+            reference: 0,
+          };
+          if (hasOwner) defPayload.owner = owner;
+          await supabase.from('inventory').insert(defPayload);
+
+          toast.success(`${qty} unidad(es) marcadas como defectuosas`);
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: `Listo. ${qty} unidad(es) de ${item.model} marcadas como defectuosas. Stock actualizado.`,
+            confirmed: true,
+          }]);
+        } else {
+          toast.error('No encontré ese producto en inventario');
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: 'No encontré ese producto en el inventario para marcarlo como defectuoso.',
+          }]);
+        }
+      }
+
+      if (pendingAction.action === 'return_order') {
+        const retData = pendingAction.data as Record<string, unknown>;
+        const orderCode = String(retData.order_code || '');
+        const clientName = String(retData.client_name || '');
+
+        let orderQuery = supabase.from('orders').select('*');
+        if (hasOwner) orderQuery = orderQuery.eq('owner', owner);
+        if (orderCode) {
+          orderQuery = orderQuery.eq('order_code', orderCode);
+        } else if (clientName) {
+          orderQuery = orderQuery.ilike('client_name', `%${clientName}%`);
+        }
+        const { data: foundOrders } = await orderQuery.limit(1);
+
+        if (foundOrders && foundOrders.length > 0) {
+          const order = foundOrders[0];
+          await supabase.from('orders')
+            .update({ delivery_status: 'Devolucion', comment: `${order.comment || ''} | Devolución: ${retData.reason || 'Sin razón'}`.trim() })
+            .eq('id', order.id);
+
+          // Restaurar stock: buscar producto en inventario y sumar cantidad
+          const detail = (order.detail || order.product_ref || '').toLowerCase();
+          if (detail) {
+            let invQuery = supabase.from('inventory').select('*').eq('status', 'Bueno');
+            if (hasOwner) invQuery = invQuery.eq('owner', owner);
+            const { data: invItems } = await invQuery;
+            if (invItems && invItems.length > 0) {
+              const match = invItems.find(i =>
+                detail.includes(i.model.toLowerCase()) ||
+                i.model.toLowerCase().includes(detail.split(' ')[0])
+              );
+              if (match) {
+                await supabase.from('inventory').update({ quantity: match.quantity + 1 }).eq('id', match.id);
+              }
+            }
+          }
+
+          toast.success('Devolución registrada');
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: `Pedido #${order.order_code} de ${order.client_name} marcado como devolución. Stock restaurado.`,
+            confirmed: true,
+          }]);
+        } else {
+          toast.error('No encontré ese pedido');
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: 'No encontré el pedido para registrar la devolución. Verifica el código o nombre del cliente.',
+          }]);
+        }
+      }
+
+      if (pendingAction.action === 'update_cost') {
+        const costData = pendingAction.data as Record<string, unknown>;
+        const model = String(costData.model || '').toLowerCase();
+        const cost = Number(costData.cost) || 0;
+
+        // Update cost in products table
+        let prodQuery = supabase.from('products').select('*');
+        if (hasOwner) prodQuery = prodQuery.eq('owner', owner);
+        if (model) prodQuery = prodQuery.ilike('name', `%${model}%`);
+        const { data: products } = await prodQuery.limit(5);
+
+        let updated = 0;
+        if (products && products.length > 0) {
+          for (const p of products) {
+            await supabase.from('products').update({ cost }).eq('id', p.id);
+            updated++;
+          }
+        }
+
+        // Also update reference cost in matching inventory items
+        let invQuery = supabase.from('inventory').select('id');
+        if (hasOwner) invQuery = invQuery.eq('owner', owner);
+        if (model) invQuery = invQuery.ilike('model', `%${model}%`);
+        if (costData.color) invQuery = invQuery.ilike('color', `%${String(costData.color)}%`);
+        if (costData.size) invQuery = invQuery.ilike('size', `%${String(costData.size)}%`);
+        const { data: invItems } = await invQuery;
+        if (invItems) {
+          for (const item of invItems) {
+            await supabase.from('inventory').update({ reference: cost }).eq('id', item.id);
+          }
+        }
+
+        toast.success('Costo actualizado');
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `Costo de "${costData.model}" actualizado a ${formatCurrency(cost)}.${updated > 0 ? ` ${updated} producto(s) en catálogo actualizados.` : ''}`,
           confirmed: true,
         }]);
       }
@@ -266,6 +428,9 @@ export default function AssistantPage() {
       case 'search_orders': return <Search className="w-4 h-4 text-orange-500" />;
       case 'search_products': return <Search className="w-4 h-4 text-pink-500" />;
       case 'generate_report': return <Download className="w-4 h-4 text-emerald-500" />;
+      case 'mark_defective': return <Package className="w-4 h-4 text-red-500" />;
+      case 'return_order': return <ShoppingBag className="w-4 h-4 text-amber-500" />;
+      case 'update_cost': return <Package className="w-4 h-4 text-cyan-500" />;
       default: return null;
     }
   };
@@ -324,6 +489,9 @@ export default function AssistantPage() {
                   {msg.action === 'search_orders' && 'Consultar pedidos'}
                   {msg.action === 'search_products' && 'Buscar productos'}
                   {msg.action === 'generate_report' && 'Generar reporte'}
+                  {msg.action === 'mark_defective' && 'Marcar defectuoso'}
+                  {msg.action === 'return_order' && 'Devolución'}
+                  {msg.action === 'update_cost' && 'Registrar costo'}
                 </div>
               )}
               <p className="whitespace-pre-wrap">{msg.content}</p>
