@@ -14,10 +14,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 401 });
   }
 
+  const isSecure = request.headers.get('x-forwarded-proto') === 'https'
+    || request.nextUrl.protocol === 'https:';
+
   const response = NextResponse.json({ success: true, username });
   response.cookies.set('meraki-session', result.token!, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSecure,
     sameSite: 'lax',
     maxAge: 30 * 24 * 60 * 60, // 30 days
     path: '/',

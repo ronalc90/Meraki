@@ -12,9 +12,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-
+  async function doLogin() {
     if (!username.trim() || !password.trim()) {
       toast.error('Por favor completa todos los campos')
       return
@@ -29,13 +27,15 @@ export default function LoginPage() {
         body: JSON.stringify({ username: username.trim(), password }),
       })
 
+      const data = await res.json().catch(() => ({}))
+
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.message ?? 'Usuario o contraseña incorrectos')
+        throw new Error(data.error || data.message || 'Usuario o contraseña incorrectos')
       }
 
-      toast.success('Bienvenida, ' + username + '!')
+      toast.success('Bienvenido/a, ' + username + '!')
       router.push('/dashboard')
+      router.refresh()
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error al iniciar sesión'
       toast.error(message)
@@ -99,7 +99,7 @@ export default function LoginPage() {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="px-8 py-8 space-y-5">
+          <form onSubmit={(e) => e.preventDefault()} className="px-8 py-8 space-y-5">
             {/* Username */}
             <div className="space-y-1.5">
               <label
@@ -152,6 +152,7 @@ export default function LoginPage() {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); doLogin(); } }}
                   disabled={loading}
                   placeholder="••••••••"
                   className="w-full rounded-xl border px-4 py-3 pr-11 text-sm outline-none transition-all duration-200 disabled:opacity-60"
@@ -225,7 +226,8 @@ export default function LoginPage() {
 
             {/* Login button */}
             <button
-              type="submit"
+              type="button"
+              onClick={doLogin}
               disabled={loading}
               className="w-full rounded-xl py-3.5 text-sm font-bold text-white transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
               style={{

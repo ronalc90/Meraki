@@ -20,11 +20,10 @@ export default function AppShell({ children }: AppShellProps) {
       <main
         className={`
           transition-all duration-300 ease-in-out
-          pb-20 md:pb-0
           ${collapsed ? 'md:ml-16' : 'md:ml-64'}
         `}
       >
-        <div className="min-h-screen p-4 md:p-6 lg:p-8">
+        <div className="min-h-screen p-4 md:p-6 lg:p-8 mobile-nav-padding">
           {children}
         </div>
       </main>
