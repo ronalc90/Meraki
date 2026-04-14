@@ -65,8 +65,68 @@ function autoWidth(sheet: ExcelJS.Worksheet) {
   })
 }
 
-/** Build the "Nacionales" / daily sheet with full order columns matching Abril2026 format */
-function buildOrdersSheet(
+/** Build "Nacionales" sheet — format matching Abril2026.xlsx Nacionales */
+function buildNacionalesSheet(
+  workbook: ExcelJS.Workbook,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  orders: any[],
+) {
+  const sheet = workbook.addWorksheet('Nacionales')
+  sheet.columns = [
+    { header: 'CLIENTE', key: 'cliente', width: 22 },
+    { header: 'CELULAR', key: 'celular', width: 14 },
+    { header: 'CIUDAD', key: 'ciudad', width: 14 },
+    { header: 'DIRECCION', key: 'direccion', width: 28 },
+    { header: 'COMPLEMENTO', key: 'complemento', width: 28 },
+    { header: 'REF', key: 'ref', width: 12 },
+    { header: 'DETALLE', key: 'detalle', width: 35 },
+    { header: 'COMENTARIO', key: 'comentario', width: 25 },
+    { header: 'VALOR A COBRAR', key: 'valor_cobrar', width: 18 },
+    { header: 'VENDEDOR', key: 'vendedor', width: 14 },
+    { header: 'DIA PEDIDO', key: 'dia_pedido', width: 14 },
+    { header: 'DIA DESPACHO', key: 'dia_despacho', width: 14 },
+    { header: 'GUIA', key: 'guia', width: 14 },
+    { header: 'ESTADO', key: 'estado', width: 20 },
+    { header: 'PAGO ANTICIPADO', key: 'pago_anticipado', width: 16 },
+    { header: 'GASTOS OP', key: 'gastos_op', width: 14 },
+    { header: 'COSTO PRODUCTO', key: 'costo', width: 16 },
+    { header: 'UTILIDAD', key: 'utilidad', width: 16 },
+  ]
+  styleHeader(sheet)
+
+  orders.forEach((o) => {
+    const utilidad = (o.value_to_collect ?? 0) - (o.product_cost ?? 0) - (o.operating_cost ?? 0)
+    const row = sheet.addRow({
+      cliente: o.client_name,
+      celular: o.phone,
+      ciudad: o.city ?? '',
+      direccion: o.address,
+      complemento: o.complement,
+      ref: o.product_ref,
+      detalle: o.detail,
+      comentario: o.comment,
+      valor_cobrar: o.value_to_collect ?? 0,
+      vendedor: o.vendor ?? '',
+      dia_pedido: o.order_date ?? '',
+      dia_despacho: o.dispatch_date ?? '',
+      guia: o.guide_number ?? '',
+      estado: o.delivery_status,
+      pago_anticipado: o.prepaid_amount ?? 0,
+      gastos_op: o.operating_cost ?? 0,
+      costo: o.product_cost ?? 0,
+      utilidad,
+    })
+    ;['valor_cobrar', 'pago_anticipado', 'gastos_op', 'costo', 'utilidad'].forEach((key) => {
+      row.getCell(key).numFmt = MONEY_FORMAT
+    })
+  })
+
+  addBorders(sheet)
+  return sheet
+}
+
+/** Build daily sheet — format matching Abril2026.xlsx sheet "1", "2", etc. */
+function buildDailySheet(
   workbook: ExcelJS.Workbook,
   sheetName: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -89,7 +149,7 @@ function buildOrdersSheet(
     { header: 'COSTO PRODUCTO', key: 'costo', width: 16 },
     { header: 'ENTREGA', key: 'entrega', width: 14 },
     { header: 'VENDEDOR', key: 'vendedor', width: 14 },
-    { header: 'ESTADO', key: 'estado', width: 14 },
+    { header: 'ESTADO', key: 'estado', width: 18 },
     { header: 'COMPLEMENTO ESTADO', key: 'comp_estado', width: 20 },
     { header: 'ES CAMBIO?', key: 'es_cambio', width: 12 },
   ]
@@ -116,7 +176,6 @@ function buildOrdersSheet(
       comp_estado: o.status_complement ?? '',
       es_cambio: o.is_exchange ? 'Si' : 'No',
     })
-    // Format money columns
     ;['valor_cobrar', 'bogo', 'caja', 'transferencia', 'costo'].forEach((key) => {
       row.getCell(key).numFmt = MONEY_FORMAT
     })
@@ -258,7 +317,7 @@ export async function GET(request: NextRequest) {
       const rows = orders ?? []
 
       // Sheet 1: Nacionales (all orders — same format as Abril2026)
-      buildOrdersSheet(workbook, 'Nacionales', rows)
+      buildNacionalesSheet(workbook, rows)
 
       // Sheet 2: Global (daily summary)
       buildGlobalSheet(workbook, rows, y, m)
@@ -295,7 +354,7 @@ export async function GET(request: NextRequest) {
       const { data: orders, error } = await ordersQuery
       if (error) throw error
 
-      buildOrdersSheet(workbook, `Pedidos ${date}`, orders ?? [])
+      buildDailySheet(workbook, `Pedidos ${date}`, orders ?? [])
     } else if (type === 'inventory') {
       let inventoryQuery = supabase.from('inventory').select('*')
       if (hasOwner) inventoryQuery = inventoryQuery.eq('owner', owner)
