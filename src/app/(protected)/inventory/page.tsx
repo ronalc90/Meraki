@@ -610,7 +610,7 @@ export default function InventoryPage() {
       </div>
 
       {/* Summary bar */}
-      <div className="fixed inset-x-0 bg-white border-t border-gray-100 px-4 py-3 shadow-lg md:bottom-0" style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}>
+      <div className="fixed inset-x-0 z-40 bg-white border-t border-gray-100 px-4 py-2 shadow-lg md:bottom-0" style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))' }}>
         <div className="mx-auto max-w-6xl flex items-center justify-between text-sm">
           <div className="flex items-center gap-2 text-gray-600">
             <Layers className="h-4 w-4" style={{ color: '#7c3aed' }} />

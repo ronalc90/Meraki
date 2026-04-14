@@ -13,6 +13,7 @@ import {
   XCircle,
   Banknote,
   TrendingUp,
+  X,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Order } from '@/lib/types'
@@ -44,11 +45,16 @@ interface KPICardProps {
   value: string | number
   icon: React.ReactNode
   color: string
+  onClick?: () => void
 }
 
-function KPICard({ label, value, icon, color }: KPICardProps) {
+function KPICard({ label, value, icon, color, onClick }: KPICardProps) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm border border-gray-100">
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm border border-gray-100 text-left transition-all active:scale-[0.97] hover:shadow-md w-full"
+    >
       <div
         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white"
         style={{ background: color }}
@@ -59,7 +65,7 @@ function KPICard({ label, value, icon, color }: KPICardProps) {
         <p className="truncate text-xs text-gray-500">{label}</p>
         <p className="truncate font-bold text-gray-900">{value}</p>
       </div>
-    </div>
+    </button>
   )
 }
 
@@ -89,6 +95,7 @@ export default function OrdersPage({
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [supabaseOk, setSupabaseOk] = useState(true)
+  const [kpiFilter, setKpiFilter] = useState<string | null>(null)
 
   const todayStr = `${now.getFullYear()}-${padDate(now.getMonth() + 1)}-${padDate(now.getDate())}`
 
@@ -157,6 +164,28 @@ export default function OrdersPage({
   const totalCosts = orders.reduce((sum, o) => sum + (o.product_cost ?? 0), 0)
   const profit = totalRevenue - totalCosts
 
+  // Filtered orders for KPI detail modal
+  const kpiOrders = kpiFilter
+    ? orders.filter((o) => {
+        if (kpiFilter === 'total') return true
+        if (kpiFilter === 'entregado') return o.delivery_status === 'Entregado'
+        if (kpiFilter === 'devolucion') return o.delivery_status === 'Devolucion'
+        if (kpiFilter === 'cancelado') return o.delivery_status === 'Cancelado'
+        if (kpiFilter === 'recaudo') return o.delivery_status === 'Entregado'
+        if (kpiFilter === 'utilidad') return o.delivery_status === 'Entregado'
+        return false
+      })
+    : []
+
+  const kpiLabels: Record<string, string> = {
+    total: 'Total Pedidos',
+    entregado: 'Entregados',
+    devolucion: 'Devoluciones',
+    cancelado: 'Cancelados',
+    recaudo: 'Recaudo',
+    utilidad: 'Utilidad',
+  }
+
   // Calendar days
   const days = getMonthDays(year, month)
   // Padding for first day of month
@@ -216,38 +245,115 @@ export default function OrdersPage({
           value={totalOrders}
           icon={<ShoppingBag className="h-5 w-5" />}
           color="#7c3aed"
+          onClick={() => setKpiFilter('total')}
         />
         <KPICard
           label="Entregados"
           value={delivered}
           icon={<PackageCheck className="h-5 w-5" />}
           color="#10b981"
+          onClick={() => setKpiFilter('entregado')}
         />
         <KPICard
           label="Devoluciones"
           value={returns}
           icon={<Undo2 className="h-5 w-5" />}
           color="#f59e0b"
+          onClick={() => setKpiFilter('devolucion')}
         />
         <KPICard
           label="Cancelados"
           value={cancelled}
           icon={<XCircle className="h-5 w-5" />}
           color="#ef4444"
+          onClick={() => setKpiFilter('cancelado')}
         />
         <KPICard
           label="Recaudo"
           value={formatCurrency(totalRevenue)}
           icon={<Banknote className="h-5 w-5" />}
           color="#0ea5e9"
+          onClick={() => setKpiFilter('recaudo')}
         />
         <KPICard
           label="Utilidad"
           value={formatCurrency(profit)}
           icon={<TrendingUp className="h-5 w-5" />}
           color={profit >= 0 ? '#10b981' : '#ef4444'}
+          onClick={() => setKpiFilter('utilidad')}
         />
       </div>
+
+      {/* KPI Detail Modal */}
+      {kpiFilter && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-end md:items-center justify-center" onClick={() => setKpiFilter(null)}>
+          <div
+            className="bg-white rounded-t-2xl md:rounded-2xl w-full max-w-lg max-h-[80dvh] flex flex-col shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
+              <h3 className="font-bold text-gray-900">{kpiLabels[kpiFilter]}</h3>
+              <button onClick={() => setKpiFilter(null)} className="p-1.5 rounded-lg hover:bg-gray-100">
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 min-h-0">
+              {kpiOrders.length === 0 ? (
+                <div className="flex items-center justify-center h-32 text-sm text-gray-400">
+                  No hay pedidos en esta categoría
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {kpiOrders.map((order) => (
+                    <button
+                      key={order.id}
+                      onClick={() => { setKpiFilter(null); router.push(`/orders/daily/${order.order_date}`) }}
+                      className="flex items-center justify-between gap-3 px-4 py-3 w-full text-left hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-gray-900 text-sm truncate">{order.client_name}</p>
+                        <p className="text-xs text-gray-400 truncate">
+                          #{order.order_code} · {order.order_date}
+                        </p>
+                        {order.detail && <p className="text-xs text-gray-500 truncate mt-0.5">{order.detail}</p>}
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <span className="font-semibold text-sm text-gray-900">
+                          {formatCurrency(order.value_to_collect)}
+                        </span>
+                        <span className={cn(
+                          'rounded-full px-2 py-0.5 text-[10px] font-medium',
+                          order.delivery_status === 'Entregado' && 'bg-emerald-100 text-emerald-700',
+                          order.delivery_status === 'Confirmado' && 'bg-blue-100 text-blue-700',
+                          order.delivery_status === 'Devolucion' && 'bg-amber-100 text-amber-700',
+                          order.delivery_status === 'Cancelado' && 'bg-red-100 text-red-700',
+                        )}>
+                          {order.delivery_status}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {kpiOrders.length > 0 && (kpiFilter === 'recaudo' || kpiFilter === 'utilidad') && (
+              <div className="px-4 py-3 border-t border-gray-100 shrink-0 bg-gray-50">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">
+                    {kpiFilter === 'recaudo' ? 'Total recaudo' : 'Utilidad'}
+                  </span>
+                  <span className="font-bold text-gray-900">
+                    {kpiFilter === 'recaudo'
+                      ? formatCurrency(totalRevenue)
+                      : formatCurrency(profit)
+                    }
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Calendar grid */}
       {loading ? (
