@@ -20,6 +20,7 @@ import type { Order } from '@/lib/types'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useUser } from '@/lib/UserContext'
 import { isOwnerSupported } from '@/lib/db'
+import { GuideCard } from '@/components/dispatch/DispatchGuide'
 
 function todayISO(): string {
   const d = new Date()
@@ -67,99 +68,25 @@ function PrintView({ orders, onClose }: { orders: Order[]; onClose: () => void }
       </div>
 
       {/* Cards grid — 2 per row, page break every 4 cards */}
-      <div className="print-area p-6 print:p-0">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 guide-grid">
+      <div className="print-area p-4 print:p-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 guide-grid">
           {orders.map((order, idx) => {
-            // After every 4th card (index 3, 7, 11…) force a page break
             const isLastInPage = (idx + 1) % 4 === 0 && idx !== orders.length - 1
             return (
-              <div
-                key={order.id}
-                className={cn(
-                  'border-2 border-solid border-gray-800 rounded-lg flex flex-col guide-card',
-                  isLastInPage ? 'guide-page-break' : ''
-                )}
-              >
-                {/* Card header */}
-                <div className="text-center py-3 px-4 border-b-2 border-solid border-gray-800 bg-gray-50 guide-card-header">
-                  <h2 className="font-black text-xl tracking-tight text-gray-900 uppercase">
-                    Tu Tienda Meraki
-                  </h2>
-                  <p className="text-xs text-gray-500 mt-0.5 font-medium">Guía de Envío</p>
-                </div>
-
-                {/* Card body */}
-                <div className="flex-1 px-4 py-3 space-y-0 text-sm guide-card-body">
-                  <div className="flex gap-2 border-b border-gray-200 py-1.5 guide-row">
-                    <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
-                      ID Pedido
-                    </span>
-                    <span className="font-bold text-gray-900 guide-value">{order.order_code}</span>
-                  </div>
-                  <div className="flex gap-2 border-b border-gray-200 py-1.5 guide-row">
-                    <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
-                      Cliente
-                    </span>
-                    <span className="font-semibold text-gray-800 guide-value">{order.client_name}</span>
-                  </div>
-                  <div className="flex gap-2 border-b border-gray-200 py-1.5 guide-row">
-                    <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
-                      Celular
-                    </span>
-                    <span className="text-gray-800 guide-value">{order.phone}</span>
-                  </div>
-                  <div className="flex gap-2 border-b border-gray-200 py-1.5 guide-row">
-                    <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
-                      Dirección
-                    </span>
-                    <span className="text-gray-800 guide-value">{order.address}</span>
-                  </div>
-                  {order.complement && (
-                    <div className="flex gap-2 border-b border-gray-200 py-1.5 guide-row">
-                      <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
-                        Barrio
-                      </span>
-                      <span className="text-gray-800 guide-value">{order.complement}</span>
-                    </div>
-                  )}
-                  <div className="flex gap-2 border-b border-gray-200 py-1.5 guide-row">
-                    <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
-                      Referencia
-                    </span>
-                    <span className="text-gray-800 guide-value">{order.product_ref}</span>
-                  </div>
-                  {order.detail && (
-                    <div className="flex gap-2 border-b border-gray-200 py-1.5 guide-row">
-                      <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
-                        Detalle
-                      </span>
-                      <span className="text-gray-800 guide-value">{order.detail}</span>
-                    </div>
-                  )}
-                  <div className="flex gap-2 items-center pt-2 mt-1 border-t-2 border-solid border-gray-400 guide-row">
-                    <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
-                      Valor a cobrar
-                    </span>
-                    <span className="text-xl font-black text-gray-900 guide-value guide-value-big">
-                      {formatCurrency(order.value_to_collect)}
-                    </span>
-                  </div>
-                  {order.comment && (
-                    <div className="flex gap-2 py-1 guide-row">
-                      <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
-                        Comentario
-                      </span>
-                      <span className="text-gray-700 italic guide-value">{order.comment}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Card footer — pinned to bottom */}
-                <div className="py-2 border-t-2 border-solid border-gray-800 text-center bg-gray-50 guide-card-footer">
-                  <p className="text-xs font-bold text-gray-600">
-                    Mayor Información 3203880422
-                  </p>
-                </div>
+              <div key={order.id} className={isLastInPage ? 'guide-page-break' : ''}>
+                <GuideCard
+                  order={{
+                    order_code: order.order_code,
+                    client_name: order.client_name,
+                    phone: order.phone,
+                    address: order.address,
+                    complement: order.complement || '',
+                    product_ref: order.product_ref || '',
+                    detail: order.detail || '',
+                    value_to_collect: order.value_to_collect,
+                    comment: order.comment || '',
+                  }}
+                />
               </div>
             )
           })}

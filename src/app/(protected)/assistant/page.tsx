@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Mic, MicOff, Send, Sparkles, Check, X, Loader2, Package, ShoppingBag, Search, MapPin, Printer } from 'lucide-react';
+import { Mic, MicOff, Send, Sparkles, Check, X, Loader2, Package, ShoppingBag, Search, MapPin, Printer, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/lib/UserContext';
 import { isOwnerSupported } from '@/lib/db';
 import { formatCurrency, generateOrderCode } from '@/lib/utils';
+import { GuideCard } from '@/components/dispatch/DispatchGuide';
+import { downloadExcel } from '@/lib/export';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -63,6 +65,30 @@ export default function AssistantPage() {
 
       if (data.needs_confirmation) {
         setPendingAction(assistantMsg);
+      }
+
+      // Agent action: auto-trigger report download
+      if (data.action === 'generate_report' && data.report) {
+        const r = data.report;
+        try {
+          const params: Record<string, string> = { owner };
+          if (r.type) params.type = r.type;
+          if (r.date) params.date = r.date;
+          if (r.month) params.month = String(r.month);
+          if (r.year) params.year = String(r.year);
+          // Default: if no date/month provided, use today
+          if (r.type === 'orders-daily' && !r.date) {
+            params.date = new Date().toISOString().slice(0, 10);
+          }
+          if (r.type === 'dashboard' && !r.month) {
+            params.month = String(new Date().getMonth() + 1);
+            params.year = String(new Date().getFullYear());
+          }
+          await downloadExcel(r.type || 'orders-daily', params);
+          toast.success('Reporte descargado');
+        } catch {
+          toast.error('Error al generar el reporte');
+        }
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error';
@@ -239,6 +265,7 @@ export default function AssistantPage() {
       case 'search_inventory': return <Search className="w-4 h-4 text-purple-500" />;
       case 'search_orders': return <Search className="w-4 h-4 text-orange-500" />;
       case 'search_products': return <Search className="w-4 h-4 text-pink-500" />;
+      case 'generate_report': return <Download className="w-4 h-4 text-emerald-500" />;
       default: return null;
     }
   };
@@ -296,6 +323,7 @@ export default function AssistantPage() {
                   {msg.action === 'search_inventory' && 'Buscar inventario'}
                   {msg.action === 'search_orders' && 'Consultar pedidos'}
                   {msg.action === 'search_products' && 'Buscar productos'}
+                  {msg.action === 'generate_report' && 'Generar reporte'}
                 </div>
               )}
               <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -411,72 +439,31 @@ export default function AssistantPage() {
         </div>
       </div>
 
-      {/* Dispatch Guide Modal — matches Excel template format */}
+      {/* Dispatch Guide Modal — matches Excel template exactly */}
       {showGuide && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full overflow-hidden shadow-2xl">
-            <div className="print-area">
-              <div className="border-2 border-solid border-gray-800 guide-card" style={{ height: 'auto' }}>
-                {/* Header */}
-                <div className="text-center py-3 px-4 border-b-2 border-solid border-gray-800 bg-gray-50 guide-card-header">
-                  <h2 className="font-black text-xl tracking-tight text-gray-900 uppercase">
-                    Tu Tienda Meraki
-                  </h2>
-                  <p className="text-xs text-gray-500 mt-0.5 font-medium">Guía de Envío</p>
-                </div>
-
-                {/* Fields */}
-                <div className="px-4 py-3 space-y-0 text-sm guide-card-body">
-                  {[
-                    ['ID Pedido', showGuide.order_code, true],
-                    ['Cliente', showGuide.client_name, false],
-                    ['Celular', showGuide.phone, false],
-                    ['Dirección', showGuide.address, false],
-                    ['Barrio', showGuide.complement, false],
-                    ['Referencia', showGuide.product_ref, false],
-                    ['Detalle', showGuide.detail, false],
-                  ].filter(([, v]) => v).map(([label, value, isBold]) => (
-                    <div key={String(label)} className="flex gap-2 border-b border-gray-200 py-1.5 guide-row">
-                      <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
-                        {String(label)}
-                      </span>
-                      <span className={`flex-1 guide-value ${isBold ? 'font-bold text-gray-900' : 'text-gray-800'}`}>
-                        {String(value)}
-                      </span>
-                    </div>
-                  ))}
-                  <div className="flex gap-2 items-center pt-2 mt-1 border-t-2 border-solid border-gray-400 guide-row">
-                    <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
-                      Valor a cobrar
-                    </span>
-                    <span className="text-xl font-black text-gray-900 guide-value guide-value-big">
-                      {formatCurrency(Number(showGuide.value_to_collect))}
-                    </span>
-                  </div>
-                  {Boolean(showGuide.comment) && (
-                    <div className="flex gap-2 py-1 guide-row">
-                      <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
-                        Comentario
-                      </span>
-                      <span className="text-gray-700 italic guide-value">{String(showGuide.comment)}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Footer */}
-                <div className="py-2 border-t-2 border-solid border-gray-800 text-center bg-gray-50 guide-card-footer">
-                  <p className="text-xs font-bold text-gray-600">
-                    Mayor Información 3203880422
-                  </p>
-                </div>
-              </div>
+          <div className="bg-white rounded-2xl max-w-xs w-full overflow-hidden shadow-2xl">
+            <div className="print-area p-3">
+              <GuideCard
+                order={{
+                  order_code: String(showGuide.order_code ?? ''),
+                  client_name: String(showGuide.client_name ?? ''),
+                  phone: String(showGuide.phone ?? ''),
+                  address: String(showGuide.address ?? ''),
+                  complement: String(showGuide.complement ?? ''),
+                  product_ref: String(showGuide.product_ref ?? ''),
+                  detail: String(showGuide.detail ?? ''),
+                  value_to_collect: Number(showGuide.value_to_collect ?? 0),
+                  comment: String(showGuide.comment ?? ''),
+                }}
+              />
             </div>
             <div className="flex gap-2 p-4 print:hidden">
               <button onClick={() => setShowGuide(null)} className="flex-1 bg-gray-100 text-gray-700 rounded-xl py-2.5 font-semibold hover:bg-gray-200 transition">
                 Cerrar
               </button>
               <button onClick={() => window.print()} className="flex-[2] flex items-center justify-center gap-2 rounded-xl py-2.5 font-bold text-white shadow-md hover:-translate-y-0.5 transition-all" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #9061f9 100%)' }}>
-                <Printer className="w-4 h-4" /> Imprimir Guía
+                <Printer className="w-4 h-4" /> Imprimir
               </button>
             </div>
           </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { formatCurrency } from '@/lib/utils';
 
 interface DispatchGuideProps {
@@ -18,51 +19,12 @@ interface DispatchGuideProps {
 }
 
 export default function DispatchGuide({ order, onClose }: DispatchGuideProps) {
-  const handlePrint = () => {
-    window.print();
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
-        {/* Guide card — matches Excel template format exactly */}
+      <div className="w-full max-w-xs bg-white rounded-2xl shadow-2xl overflow-hidden">
+        {/* Guide card — matching Excel template exactly */}
         <div className="print-area">
-          <div className="border-2 border-solid border-gray-800 guide-card" style={{ height: 'auto' }}>
-            {/* Header */}
-            <div className="text-center py-3 px-4 border-b-2 border-solid border-gray-800 bg-gray-50 guide-card-header">
-              <h2 className="font-black text-xl tracking-tight text-gray-900 uppercase">
-                Tu Tienda Meraki
-              </h2>
-              <p className="text-xs text-gray-500 mt-0.5 font-medium">Guía de Envío</p>
-            </div>
-
-            {/* Fields */}
-            <div className="px-4 py-3 space-y-0 text-sm guide-card-body">
-              <GuideRow label="ID Pedido" value={order.order_code} bold />
-              <GuideRow label="Cliente" value={order.client_name} semibold />
-              <GuideRow label="Celular" value={order.phone} />
-              <GuideRow label="Dirección" value={order.address} />
-              {order.complement && <GuideRow label="Barrio" value={order.complement} />}
-              {order.product_ref && <GuideRow label="Referencia" value={order.product_ref} />}
-              <GuideRow label="Detalle" value={order.detail} />
-              <div className="flex gap-2 items-center pt-2 mt-1 border-t-2 border-solid border-gray-400 guide-row">
-                <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
-                  Valor a cobrar
-                </span>
-                <span className="text-xl font-black text-gray-900 guide-value guide-value-big">
-                  {formatCurrency(order.value_to_collect)}
-                </span>
-              </div>
-              {order.comment && <GuideRow label="Comentario" value={order.comment} italic />}
-            </div>
-
-            {/* Footer */}
-            <div className="py-2 border-t-2 border-solid border-gray-800 text-center bg-gray-50 guide-card-footer">
-              <p className="text-xs font-bold text-gray-600">
-                Mayor Información 3203880422
-              </p>
-            </div>
-          </div>
+          <GuideCard order={order} />
         </div>
 
         {/* Action buttons — hidden when printing */}
@@ -74,11 +36,11 @@ export default function DispatchGuide({ order, onClose }: DispatchGuideProps) {
             Cerrar
           </button>
           <button
-            onClick={handlePrint}
+            onClick={() => window.print()}
             className="flex-[2] rounded-xl py-2.5 text-sm font-bold text-white shadow-md transition-all hover:-translate-y-0.5"
             style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #9061f9 100%)' }}
           >
-            Imprimir Guía
+            Imprimir
           </button>
         </div>
       </div>
@@ -86,30 +48,73 @@ export default function DispatchGuide({ order, onClose }: DispatchGuideProps) {
   );
 }
 
-interface GuideRowProps {
-  label: string;
-  value: string;
-  bold?: boolean;
-  semibold?: boolean;
-  italic?: boolean;
+/** Reusable guide card — used in DispatchGuide modal AND in PrintView batch */
+export function GuideCard({
+  order,
+}: {
+  order: {
+    order_code: string;
+    client_name: string;
+    phone: string;
+    address: string;
+    complement: string;
+    product_ref: string;
+    detail: string;
+    value_to_collect: number;
+    comment: string;
+  };
+}) {
+  return (
+    <div className="border-2 border-black guide-card">
+      {/* Header — black background with logo */}
+      <div className="bg-black flex items-center justify-center gap-3 px-4 py-3 guide-card-header">
+        <Image
+          src="/logo-meraki.svg"
+          alt="Meraki"
+          width={50}
+          height={34}
+          className="invert"
+          style={{ filter: 'invert(1)' }}
+        />
+        <div className="text-white text-center">
+          <p className="font-bold text-sm leading-tight">Tu Tienda</p>
+          <p className="font-bold text-sm leading-tight">Meraki</p>
+        </div>
+      </div>
+
+      {/* Separator */}
+      <div className="border-b-2 border-black" />
+
+      {/* Stacked field rows — each value in its own bordered cell, NO labels */}
+      <div className="guide-card-body">
+        <GuideRow value={order.order_code} bold />
+        <GuideRow value={order.client_name} />
+        <GuideRow value={order.phone} />
+        <GuideRow value={order.address} />
+        <GuideRow value={order.complement} />
+        <GuideRow value={order.product_ref} />
+        <GuideRow value={order.detail} />
+        <GuideRow value={formatCurrency(order.value_to_collect)} bold />
+        <GuideRow value={order.comment} />
+      </div>
+
+      {/* Footer */}
+      <div className="border-t-2 border-black py-2 text-center guide-card-footer">
+        <p className="text-xs font-semibold text-gray-700 leading-tight">Mayor Información</p>
+        <p className="text-xs font-bold text-gray-900">3203880422.</p>
+      </div>
+    </div>
+  );
 }
 
-function GuideRow({ label, value, bold, semibold, italic }: GuideRowProps) {
+function GuideRow({ value, bold }: { value: string | number; bold?: boolean }) {
+  const display = value === 0 ? '$0' : value;
+  if (!display) return null;
   return (
-    <div className="flex gap-2 border-b border-gray-200 py-1.5 guide-row">
-      <span className="w-28 shrink-0 text-xs font-bold text-gray-500 uppercase tracking-wide guide-label">
-        {label}
-      </span>
-      <span
-        className={`flex-1 text-sm guide-value ${
-          bold ? 'font-bold text-gray-900' :
-          semibold ? 'font-semibold text-gray-800' :
-          italic ? 'text-gray-700 italic' :
-          'text-gray-800'
-        }`}
-      >
-        {value || '—'}
-      </span>
+    <div className="border-b border-gray-300 px-3 py-1.5 guide-row">
+      <p className={`text-sm ${bold ? 'font-bold text-black' : 'text-gray-900'}`}>
+        {String(display)}
+      </p>
     </div>
   );
 }
