@@ -271,7 +271,7 @@ export default function AssistantPage() {
   };
 
   return (
-    <div className="flex flex-col -mx-4 -mt-4 -mb-4 md:mx-auto md:mt-0 md:mb-0 max-w-2xl h-[calc(100dvh-5rem)] md:h-[calc(100dvh-3rem)] overflow-hidden">
+    <div className="fixed inset-x-0 top-0 z-40 flex flex-col bg-gray-50 md:static md:inset-auto md:bottom-auto md:z-auto md:max-w-2xl md:mx-auto md:h-[calc(100dvh-3rem)] overflow-hidden" style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))' }}>
       {/* Header — compact on mobile */}
       <div className="px-3 py-2 border-b border-gray-100 shrink-0 bg-white">
         <div className="flex items-center gap-2">
