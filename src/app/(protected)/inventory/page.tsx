@@ -78,9 +78,9 @@ function InventoryModal({ item, onClose, onSave, saving }: ModalProps) {
   const isEdit = !!(item && 'id' in item && item.id)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-xl max-h-[90vh]">
-        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+    <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/40 p-0 md:p-4">
+      <div className="w-full max-w-lg rounded-t-2xl md:rounded-2xl bg-white shadow-xl max-h-[90dvh] flex flex-col">
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 shrink-0">
           <h2 className="text-lg font-bold text-gray-900">
             {isEdit ? 'Editar Producto' : 'Agregar Producto'}
           </h2>
@@ -89,7 +89,7 @@ function InventoryModal({ item, onClose, onSave, saving }: ModalProps) {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 p-6">
+        <div className="grid grid-cols-2 gap-4 p-6 overflow-y-auto flex-1 min-h-0">
           <div className="col-span-2 grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">Canasta</label>
@@ -222,7 +222,7 @@ function InventoryModal({ item, onClose, onSave, saving }: ModalProps) {
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
+        <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4 shrink-0" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
           <button
             onClick={onClose}
             className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
