@@ -308,6 +308,88 @@ export default function AssistantPage() {
         }
       }
 
+      if (pendingAction.action === 'update_order_status') {
+        const statusData = pendingAction.data as Record<string, unknown>;
+        const orderCode = String(statusData.order_code || '');
+        const clientName = String(statusData.client_name || '');
+        const newStatus = String(statusData.new_status || 'Entregado');
+
+        let orderQuery = supabase.from('orders').select('*');
+        if (hasOwner) orderQuery = orderQuery.eq('owner', owner);
+        if (orderCode) {
+          orderQuery = orderQuery.eq('order_code', orderCode);
+        } else if (clientName) {
+          orderQuery = orderQuery.ilike('client_name', `%${clientName}%`);
+        }
+        orderQuery = orderQuery.order('created_at', { ascending: false });
+        const { data: foundOrders } = await orderQuery.limit(1);
+
+        if (foundOrders && foundOrders.length > 0) {
+          const order = foundOrders[0];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const updatePayload: any = { delivery_status: newStatus };
+          if (statusData.payment_cash) updatePayload.payment_cash = Number(statusData.payment_cash);
+          if (statusData.payment_transfer) updatePayload.payment_transfer = Number(statusData.payment_transfer);
+
+          await supabase.from('orders').update(updatePayload).eq('id', order.id);
+
+          // If marking as delivered, deduct stock
+          if (newStatus === 'Entregado' && order.delivery_status === 'Confirmado') {
+            const detail = (order.detail || order.product_ref || '').toLowerCase();
+            if (detail) {
+              let invQ = supabase.from('inventory').select('*').eq('status', 'Bueno').gt('quantity', 0);
+              if (hasOwner) invQ = invQ.eq('owner', owner);
+              const { data: inv } = await invQ;
+              if (inv) {
+                const match = inv.find(i => detail.includes(i.model.toLowerCase()) || i.model.toLowerCase().includes(detail.split(' ')[0]));
+                if (match) await supabase.from('inventory').update({ quantity: Math.max(0, match.quantity - 1) }).eq('id', match.id);
+              }
+            }
+          }
+
+          toast.success(`Pedido actualizado a ${newStatus}`);
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: `Pedido #${order.order_code} de ${order.client_name} actualizado a "${newStatus}".`,
+            confirmed: true,
+          }]);
+        } else {
+          toast.error('No encontré ese pedido');
+          setMessages(prev => [...prev, { role: 'assistant', content: 'No encontré el pedido para actualizar.' }]);
+        }
+      }
+
+      if (pendingAction.action === 'register_expense') {
+        const expData = pendingAction.data as Record<string, unknown>;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const payload: any = {
+          description: String(expData.description || ''),
+          amount: Number(expData.amount) || 0,
+          category: String(expData.category || 'otro'),
+          expense_date: new Date().toISOString().slice(0, 10),
+        };
+        if (hasOwner) payload.owner = owner;
+        if (expData.order_id) payload.order_id = Number(expData.order_id);
+        if (expData.product_ref) payload.product_ref = String(expData.product_ref);
+
+        const { error } = await supabase.from('expenses').insert(payload);
+        if (error) {
+          // Table might not exist yet
+          toast.error('Tabla de gastos no encontrada. Ejecuta la migración SQL.');
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: 'No pude guardar el gasto. La tabla "expenses" no existe aún. Pídele a Ronald que ejecute el SQL de migración en Supabase.',
+          }]);
+        } else {
+          toast.success('Gasto registrado');
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: `Gasto de ${formatCurrency(Number(expData.amount))} registrado: "${expData.description}".`,
+            confirmed: true,
+          }]);
+        }
+      }
+
       if (pendingAction.action === 'update_cost') {
         const costData = pendingAction.data as Record<string, unknown>;
         const model = String(costData.model || '').toLowerCase();
@@ -431,6 +513,8 @@ export default function AssistantPage() {
       case 'mark_defective': return <Package className="w-4 h-4 text-red-500" />;
       case 'return_order': return <ShoppingBag className="w-4 h-4 text-amber-500" />;
       case 'update_cost': return <Package className="w-4 h-4 text-cyan-500" />;
+      case 'update_order_status': return <ShoppingBag className="w-4 h-4 text-emerald-500" />;
+      case 'register_expense': return <ShoppingBag className="w-4 h-4 text-red-500" />;
       default: return null;
     }
   };
@@ -492,6 +576,8 @@ export default function AssistantPage() {
                   {msg.action === 'mark_defective' && 'Marcar defectuoso'}
                   {msg.action === 'return_order' && 'Devolución'}
                   {msg.action === 'update_cost' && 'Registrar costo'}
+                  {msg.action === 'update_order_status' && 'Cambiar estado'}
+                  {msg.action === 'register_expense' && 'Registrar gasto'}
                 </div>
               )}
               <p className="whitespace-pre-wrap">{msg.content}</p>
