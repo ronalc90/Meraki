@@ -270,7 +270,7 @@ export default function AssistantPage() {
     }
   };
 
-  return (
+  const chatUI = (
     <div className="fixed inset-x-0 top-0 z-40 flex flex-col bg-gray-50 md:static md:inset-auto md:bottom-auto md:z-auto md:max-w-2xl md:mx-auto md:h-[calc(100dvh-3rem)] overflow-hidden" style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))' }}>
       {/* Header — compact on mobile */}
       <div className="px-3 py-2 border-b border-gray-100 shrink-0 bg-white">
@@ -439,11 +439,18 @@ export default function AssistantPage() {
         </div>
       </div>
 
-      {/* Dispatch Guide Modal — matches Excel template exactly */}
+    </div>
+  );
+
+  return (
+    <>
+      {chatUI}
+
+      {/* Dispatch Guide Modal — rendered outside the chat container so it covers everything */}
       {showGuide && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4">
-          <div className="bg-white rounded-t-2xl md:rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl max-h-[90dvh] overflow-y-auto">
-            <div className="print-area p-3">
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl max-h-[85dvh] flex flex-col">
+            <div className="print-area p-3 overflow-y-auto flex-1 min-h-0">
               <GuideCard
                 order={{
                   order_code: String(showGuide.order_code ?? ''),
@@ -458,7 +465,7 @@ export default function AssistantPage() {
                 }}
               />
             </div>
-            <div className="flex gap-2 p-3 md:p-4 print:hidden" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+            <div className="flex gap-2 p-3 md:p-4 print:hidden shrink-0" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
               <button onClick={() => setShowGuide(null)} className="flex-1 bg-gray-100 text-gray-700 rounded-xl py-2.5 text-sm font-semibold hover:bg-gray-200 transition">
                 Cerrar
               </button>
@@ -469,6 +476,6 @@ export default function AssistantPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
