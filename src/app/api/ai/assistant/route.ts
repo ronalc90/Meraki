@@ -255,8 +255,11 @@ export async function POST(request: NextRequest) {
     const openai = new OpenAI({ apiKey });
     const supabase = getServiceClient();
 
+    const now = new Date();
+    const dateInfo = `Fecha y hora actual: ${now.toISOString().slice(0, 10)} (${now.toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}). Mes actual: ${now.getMonth() + 1}, Año: ${now.getFullYear()}.`;
+
     const messages: OpenAI.ChatCompletionMessageParam[] = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: SYSTEM_PROMPT + '\n\n' + dateInfo },
     ];
 
     if (context && Array.isArray(context)) {
