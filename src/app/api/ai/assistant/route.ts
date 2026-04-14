@@ -188,19 +188,56 @@ Para CONFIRMAR una acción pendiente (el usuario dice "sí", "confirmar", "dale"
   "message": "confirmado"
 }
 
+Para EDITAR un pedido existente (cambiar dirección, detalle, valor, etc.):
+{
+  "action": "edit_order",
+  "data": {
+    "order_code": "string o null",
+    "client_name": "string o null",
+    "updates": { "campo": "nuevo_valor" }
+  },
+  "message": "resumen amigable",
+  "needs_confirmation": true
+}
+Campos editables: client_name, phone, address, complement, detail, comment, value_to_collect, product_ref, city
+
+Para RESUMEN MENSUAL (cuando pregunta ventas del mes, ganancias, cuánto llevo):
+{
+  "action": "monthly_summary",
+  "data": {
+    "month": number (1-12, default mes actual),
+    "year": number (default año actual)
+  },
+  "message": "voy a calcular..."
+}
+
+Para BUSCAR GASTOS:
+{
+  "action": "search_expenses",
+  "search": {
+    "category": "string o null",
+    "date": "YYYY-MM-DD o null"
+  },
+  "message": "voy a buscar..."
+}
+
 Reglas:
 - SIEMPRE needs_confirmation=true para acciones que modifican datos (crear, actualizar, eliminar)
-- Si falta información crítica, usa action="chat" y pregunta
+- Para CREAR PEDIDO: dirección es OBLIGATORIA. Si falta, usa action="chat" y pide dirección.
+- Para CREAR PEDIDO: incluye la cantidad en el campo "detail" (ej: "2 pantuflas vaquita blanca talla 38")
+- Para CREAR PEDIDO: incluye "quantity" en data (número de unidades, default 1)
 - Talla: "38" → "38-39", "36" → "36-37", "40" → "40-41"
 - Ciudad por defecto: Bogotá
-- Producto: "vaquita","vaca" → PANT, "maxisaco","cool" → MAX, "clásica" → PANT
+- Producto: "vaquita","vaca" → PANT, "maxisaco","cool" → MAX, "clásica" → PANT, "stitch" → PANT
 - Sé conciso y amigable en los mensajes
 - Si el usuario es ambiguo pero puedes deducir la intención, hazlo e incluye needs_confirmation=true
 - Tienes autoridad TOTAL para modificar pedidos, inventario, estados, costos, etc.
-- Cuando el usuario dice "ya se entregó" o "ya llegó" → update_order_status con new_status="Entregado"
+- Cuando dice "ya se entregó" o "ya llegó" → update_order_status con new_status="Entregado"
 - Cuando dice "cancela" → update_order_status con new_status="Cancelado"
 - Cuando dice "devolvieron" → return_order
 - Cuando dice "dañado", "roto", "defectuoso" → mark_defective
+- Cuando pregunta "cuánto he vendido", "ganancias", "utilidad del mes" → monthly_summary
+- Cuando pregunta "cuántos me quedan de X" → search_inventory (usa términos parciales: "vaquita" busca modelos que contengan "vaquita")
 - Si el usuario dice algo que no entiendes, intenta interpretar en contexto de una tienda de pantuflas`;
 
 export async function POST(request: NextRequest) {
@@ -245,7 +282,7 @@ export async function POST(request: NextRequest) {
     // Handle search actions server-side
     if (parsed.action === 'search_inventory') {
       const s = parsed.search || {};
-      let query = supabase.from('inventory').select('*');
+      let query = supabase.from('inventory').select('*').eq('status', 'Bueno').gt('quantity', 0);
       if (owner) query = query.eq('owner', owner);
       if (s.model) query = query.ilike('model', `%${s.model}%`);
       if (s.color) query = query.ilike('color', `%${s.color}%`);
@@ -254,11 +291,26 @@ export async function POST(request: NextRequest) {
       const { data: results } = await query.limit(20);
 
       if (!results?.length) {
-        parsed.message = `No encontré productos con esas características en el inventario.`;
-        parsed.results = [];
+        // Try broader search without filters
+        let broadQuery = supabase.from('inventory').select('*').eq('status', 'Bueno').gt('quantity', 0);
+        if (owner) broadQuery = broadQuery.eq('owner', owner);
+        const term = s.model || s.color || '';
+        if (term) broadQuery = broadQuery.or(`model.ilike.%${term}%,color.ilike.%${term}%,category.ilike.%${term}%`);
+        const { data: broadResults } = await broadQuery.limit(20);
+
+        if (broadResults?.length) {
+          const totalQty = broadResults.reduce((sum: number, r: Record<string, unknown>) => sum + (Number(r.quantity) || 0), 0);
+          const summary = broadResults.map((r: Record<string, unknown>) => `• ${r.model} ${r.color || ''} ${r.size || ''} - Cant: ${r.quantity} - ${r.basket_location}`).join('\n');
+          parsed.message = `Encontré ${broadResults.length} item(s), ${totalQty} unidades en total:\n${summary}`;
+          parsed.results = broadResults;
+        } else {
+          parsed.message = `No encontré productos con esas características en el inventario.`;
+          parsed.results = [];
+        }
       } else {
-        const summary = results.map(r => `• ${r.model} ${r.color || ''} ${r.size || ''} - Cantidad: ${r.quantity} - Canasta: ${r.basket_location}`).join('\n');
-        parsed.message = `Encontré ${results.length} resultado(s):\n${summary}`;
+        const totalQty = results.reduce((sum: number, r: Record<string, unknown>) => sum + (Number(r.quantity) || 0), 0);
+        const summary = results.map((r: Record<string, unknown>) => `• ${r.model} ${r.color || ''} ${r.size || ''} - Cant: ${r.quantity} - ${r.basket_location}`).join('\n');
+        parsed.message = `Encontré ${results.length} item(s), ${totalQty} unidades en total:\n${summary}`;
         parsed.results = results;
       }
     }
@@ -300,6 +352,111 @@ export async function POST(request: NextRequest) {
         const total = results.reduce((s, o) => s + (o.value_to_collect || 0), 0);
         parsed.message = `${results.length} pedido(s) para ${s.date || today}. Total: $${total.toLocaleString('es-CO')}`;
         parsed.results = results;
+      }
+    }
+
+    // Monthly summary
+    if (parsed.action === 'monthly_summary') {
+      const d = parsed.data || {};
+      const now = new Date();
+      const m = Number(d.month) || (now.getMonth() + 1);
+      const y = Number(d.year) || now.getFullYear();
+      const from = `${y}-${String(m).padStart(2, '0')}-01`;
+      const lastDay = new Date(y, m, 0).getDate();
+      const to = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+      let query = supabase.from('orders').select('*');
+      if (owner) query = query.eq('owner', owner);
+      query = query.gte('order_date', from).lte('order_date', to);
+      const { data: monthOrders } = await query;
+      const orders = monthOrders || [];
+
+      const total = orders.length;
+      const entregados = orders.filter(o => o.delivery_status === 'Entregado');
+      const confirmados = orders.filter(o => o.delivery_status === 'Confirmado');
+      const devoluciones = orders.filter(o => o.delivery_status === 'Devolucion');
+      const cancelados = orders.filter(o => o.delivery_status === 'Cancelado');
+      const activos = orders.filter(o => o.delivery_status === 'Confirmado' || o.delivery_status === 'Entregado');
+      const ingresos = activos.reduce((s, o) => s + (o.value_to_collect || 0), 0);
+      const costos = activos.reduce((s, o) => s + (o.product_cost || 0) + (o.operating_cost || 0), 0);
+
+      // Get expenses for the month
+      let expQuery = supabase.from('expenses').select('*');
+      if (owner) expQuery = expQuery.eq('owner', owner);
+      expQuery = expQuery.gte('expense_date', from).lte('expense_date', to);
+      const { data: monthExpenses } = await expQuery;
+      const gastos = (monthExpenses || []).reduce((s: number, e: Record<string, unknown>) => s + (Number(e.amount) || 0), 0);
+
+      const utilidad = ingresos - costos - gastos;
+      const fmt = (n: number) => `$${n.toLocaleString('es-CO')}`;
+
+      parsed.message = `📊 Resumen de ${['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][m-1]} ${y}:\n` +
+        `• Total pedidos: ${total}\n` +
+        `• Entregados: ${entregados.length} | Confirmados: ${confirmados.length}\n` +
+        `• Devoluciones: ${devoluciones.length} | Cancelados: ${cancelados.length}\n` +
+        `• Ingresos: ${fmt(ingresos)}\n` +
+        `• Costos productos: ${fmt(costos)}\n` +
+        `• Gastos operativos: ${fmt(gastos)}\n` +
+        `• Utilidad: ${fmt(utilidad)}`;
+      parsed.results = orders.slice(0, 10);
+    }
+
+    // Search expenses
+    if (parsed.action === 'search_expenses') {
+      const s = parsed.search || {};
+      const today = new Date().toISOString().slice(0, 10);
+      let query = supabase.from('expenses').select('*');
+      if (owner) query = query.eq('owner', owner);
+      if (s.category) query = query.eq('category', s.category);
+      if (s.date) {
+        query = query.eq('expense_date', s.date);
+      } else {
+        // Default: this month
+        const from = today.slice(0, 8) + '01';
+        query = query.gte('expense_date', from).lte('expense_date', today);
+      }
+      const { data: results } = await query.order('created_at', { ascending: false }).limit(20);
+
+      if (!results?.length) {
+        parsed.message = 'No encontré gastos registrados para ese período.';
+        parsed.results = [];
+      } else {
+        const totalGastos = results.reduce((s: number, e: Record<string, unknown>) => s + (Number(e.amount) || 0), 0);
+        const summary = results.map((r: Record<string, unknown>) => `• ${r.description}: $${Number(r.amount).toLocaleString('es-CO')} (${r.category})`).join('\n');
+        parsed.message = `${results.length} gasto(s), total: $${totalGastos.toLocaleString('es-CO')}:\n${summary}`;
+        parsed.results = results;
+      }
+    }
+
+    // Edit order server-side
+    if (parsed.action === 'edit_order') {
+      const d = parsed.data || {};
+      let query = supabase.from('orders').select('*');
+      if (owner) query = query.eq('owner', owner);
+      if (d.order_code) query = query.eq('order_code', d.order_code);
+      else if (d.client_name) query = query.ilike('client_name', `%${d.client_name}%`);
+      const { data: found } = await query.order('created_at', { ascending: false }).limit(1);
+
+      if (found?.length) {
+        const order = found[0];
+        const updates = d.updates || {};
+        const allowedFields = ['client_name', 'phone', 'address', 'complement', 'detail', 'comment', 'value_to_collect', 'product_ref', 'city'];
+        const safeUpdates: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(updates)) {
+          if (allowedFields.includes(k)) safeUpdates[k] = v;
+        }
+        if (Object.keys(safeUpdates).length > 0) {
+          await supabase.from('orders').update(safeUpdates).eq('id', order.id);
+          const changedFields = Object.keys(safeUpdates).join(', ');
+          parsed.message = `Pedido #${order.order_code} de ${order.client_name} actualizado (${changedFields}).`;
+          parsed.confirmed = true;
+        } else {
+          parsed.message = 'No se especificaron campos válidos para editar.';
+        }
+        parsed.needs_confirmation = false;
+      } else {
+        parsed.message = 'No encontré ese pedido para editar.';
+        parsed.needs_confirmation = false;
       }
     }
 

@@ -144,9 +144,10 @@ export default function AssistantPage() {
         const { error } = await supabase.from('orders').insert(payload);
         if (error) throw error;
 
-        // Descontar stock del inventario si hay detalle del producto
+        // Descontar stock del inventario usando la cantidad del pedido
         const detail = String(orderData.detail || '').toLowerCase();
         const productRef = String(orderData.product_ref || '').toLowerCase();
+        const orderQty = Number(orderData.quantity) || 1;
         if (detail || productRef) {
           const searchTerm = detail || productRef;
           let invQuery = supabase.from('inventory').select('*').eq('status', 'Bueno').gt('quantity', 0);
@@ -158,7 +159,7 @@ export default function AssistantPage() {
               i.model.toLowerCase().includes(searchTerm.split(' ')[0])
             );
             if (match) {
-              const newQty = Math.max(0, match.quantity - 1);
+              const newQty = Math.max(0, match.quantity - orderQty);
               await supabase.from('inventory').update({ quantity: newQty }).eq('id', match.id);
             }
           }
