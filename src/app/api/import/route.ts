@@ -76,7 +76,8 @@ function detectType(headers: string[]): 'orders' | 'inventory' | 'products' | nu
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
+    let formData: FormData;
+    try { formData = await request.formData(); } catch { return NextResponse.json({ error: 'Envía un archivo Excel como FormData' }, { status: 400 }); }
     const file = formData.get('file') as File;
     const forceType = formData.get('type') as string | null;
     const owner = formData.get('owner') as string || 'Paola';
