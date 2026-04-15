@@ -45,7 +45,7 @@ body {
 /* Prevent iOS zoom on inputs */
 input, select, textarea { font-size: 16px !important; }
 
-/* Print styles */
+/* Print styles — optimized for XP-56C thermal printer (58mm / ~48mm printable) */
 @media print {
   body * { visibility: hidden; }
   .print-area, .print-area * { visibility: visible; }
@@ -57,55 +57,67 @@ input, select, textarea { font-size: 16px !important; }
   }
   .no-print { display: none !important; }
 
-  /* Guide cards: 2 per row, 4 per page (2x2) */
-  .guide-grid {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 6px !important;
-    padding: 4px !important;
-  }
+  /* Single guide card — 1 per page, fits 58mm thermal */
   .guide-card {
-    border: 2px solid #000 !important;
+    border: 1px solid #000 !important;
     border-radius: 0 !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
-    height: calc(50vh - 12px) !important;
+    width: 48mm !important;
     box-sizing: border-box !important;
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
+    height: auto !important;
   }
   .guide-card-header {
     background: #000 !important;
-    padding: 6px 8px !important;
+    padding: 3px 4px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 8px !important;
+    gap: 4px !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+  .guide-card-header img {
+    width: 28px !important;
+    height: auto !important;
+  }
   .guide-card-header p {
     color: #fff !important;
-    font-size: 11px !important;
+    font-size: 8px !important;
+    line-height: 1.1 !important;
   }
   .guide-card-body {
-    flex: 1 !important;
     padding: 0 !important;
   }
   .guide-card-body .guide-row {
-    border-bottom: 1px solid #999 !important;
-    padding: 2px 8px !important;
+    border-bottom: 1px solid #ccc !important;
+    padding: 1px 4px !important;
   }
   .guide-card-body .guide-row p {
-    font-size: 11px !important;
+    font-size: 9px !important;
     color: #000 !important;
+    line-height: 1.2 !important;
+    word-break: break-word !important;
   }
   .guide-card-footer {
-    border-top: 2px solid #000 !important;
-    padding: 4px !important;
+    border-top: 1px solid #000 !important;
+    padding: 2px !important;
     text-align: center !important;
-    font-size: 9px !important;
+  }
+  .guide-card-footer p {
+    font-size: 7px !important;
+    line-height: 1.1 !important;
+  }
+
+  /* Batch guides: single column for thermal */
+  .guide-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    padding: 0 !important;
   }
   .guide-page-break {
     break-after: page !important;
@@ -113,8 +125,8 @@ input, select, textarea { font-size: 16px !important; }
   }
 
   @page {
-    margin: 5mm;
-    size: letter;
+    margin: 1mm;
+    size: 58mm auto;
   }
 }
 

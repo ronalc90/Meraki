@@ -65,9 +65,9 @@ export function GuideCard({
   };
 }) {
   return (
-    <div className="border-2 border-black guide-card">
+    <div className="border-2 border-black guide-card max-w-[200px] mx-auto">
       {/* Header — black background with logo */}
-      <div className="bg-black flex items-center justify-center gap-3 px-4 py-3 guide-card-header">
+      <div className="bg-black flex items-center justify-center gap-2 px-3 py-2 guide-card-header">
         <Image
           src="/logo-meraki.svg"
           alt="Meraki"
@@ -77,8 +77,8 @@ export function GuideCard({
           style={{ filter: 'invert(1)' }}
         />
         <div className="text-white text-center">
-          <p className="font-bold text-sm leading-tight">Tu Tienda</p>
-          <p className="font-bold text-sm leading-tight">Meraki</p>
+          <p className="font-bold text-xs leading-tight">Tu Tienda</p>
+          <p className="font-bold text-xs leading-tight">Meraki</p>
         </div>
       </div>
 
@@ -99,9 +99,9 @@ export function GuideCard({
       </div>
 
       {/* Footer */}
-      <div className="border-t-2 border-black py-2 text-center guide-card-footer">
-        <p className="text-xs font-semibold text-gray-700 leading-tight">Mayor Información</p>
-        <p className="text-xs font-bold text-gray-900">3203880422.</p>
+      <div className="border-t-2 border-black py-1 text-center guide-card-footer">
+        <p className="text-[10px] font-semibold text-gray-700 leading-tight">Mayor Información</p>
+        <p className="text-[10px] font-bold text-gray-900">3203880422.</p>
       </div>
     </div>
   );
@@ -111,8 +111,8 @@ function GuideRow({ value, bold }: { value: string | number; bold?: boolean }) {
   const display = value === 0 ? '$0' : value;
   if (!display) return null;
   return (
-    <div className="border-b border-gray-300 px-3 py-1.5 guide-row">
-      <p className={`text-sm ${bold ? 'font-bold text-black' : 'text-gray-900'}`}>
+    <div className="border-b border-gray-300 px-2 py-1 guide-row">
+      <p className={`text-xs ${bold ? 'font-bold text-black' : 'text-gray-900'} break-words`}>
         {String(display)}
       </p>
     </div>
