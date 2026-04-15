@@ -9,6 +9,7 @@ import { isOwnerSupported } from '@/lib/db';
 import { formatCurrency, generateOrderCode } from '@/lib/utils';
 import { GuideCard } from '@/components/dispatch/DispatchGuide';
 import { downloadExcel } from '@/lib/export';
+import PhotoCapture from '@/components/shared/PhotoCapture';
 
 interface SubAction {
   action: string;
@@ -34,6 +35,7 @@ export default function AssistantPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [pendingAction, setPendingAction] = useState<ChatMessage | null>(null);
   const [showGuide, setShowGuide] = useState<Record<string, unknown> | null>(null);
+  const [photoPrompt, setPhotoPrompt] = useState<{ model: string; ids: number[] } | null>(null);
   const [chatLoaded, setChatLoaded] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
@@ -173,8 +175,12 @@ export default function AssistantPage() {
       const items = (Array.isArray(data) ? data : [data]) as Array<Record<string, unknown>>;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const payloads = items.map(item => { const p: any = { model: item.model || '', category: item.category || 'Pantuflas', product_id: item.product_id || '', color: item.color || '', size: item.size || '', quantity: Number(item.quantity) || 1, basket_location: item.basket_location || '', type: item.type || 'Adulto', observations: item.observations || '', status: 'Bueno', verified: false, reference: 0 }; if (hasOwner) p.owner = owner; return p; });
-      const { error } = await supabase.from('inventory').insert(payloads);
+      const { data: inserted, error } = await supabase.from('inventory').insert(payloads).select('id');
       if (error) throw error;
+      // Offer photo capture for the new items
+      const modelName = String(items[0]?.model || 'producto');
+      const ids = (inserted || []).map((r: { id: number }) => r.id);
+      if (ids.length > 0) setPhotoPrompt({ model: modelName, ids });
       return `${items.length} item(s) agregados al inventario.`;
     }
     if (action === 'mark_defective') {
@@ -510,6 +516,34 @@ export default function AssistantPage() {
               <X className="w-3.5 h-3.5" /> Corregir
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Photo prompt after adding inventory */}
+      {photoPrompt && (
+        <div className="mx-2 md:mx-4 mb-1 p-3 bg-purple-50 border border-purple-200 rounded-xl animate-fadeIn shrink-0">
+          <p className="text-xs font-semibold text-purple-800 mb-2">
+            ¿Quieres tomar foto de {photoPrompt.model}?
+          </p>
+          <PhotoCapture
+            onPhotoReady={async (url) => {
+              if (url) {
+                for (const id of photoPrompt.ids) {
+                  await supabase.from('inventory').update({ image_url: url }).eq('id', id);
+                }
+                toast.success('Foto guardada en inventario');
+                setMessages(prev => [...prev, { role: 'assistant', content: 'Foto agregada al producto en inventario.', confirmed: true }]);
+              }
+              setPhotoPrompt(null);
+              scrollToBottom();
+            }}
+          />
+          <button
+            onClick={() => setPhotoPrompt(null)}
+            className="mt-2 w-full text-xs text-gray-500 hover:text-gray-700 transition"
+          >
+            Omitir foto
+          </button>
         </div>
       )}
 
