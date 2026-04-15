@@ -264,8 +264,11 @@ Reglas:
 - Si el usuario dice algo que no entiendes, intenta interpretar en contexto de una tienda de pantuflas
 - NUNCA respondas solo "Procesado" — SIEMPRE da una respuesta descriptiva y amigable
 - Cuando no tengas toda la info, usa action="chat" y PREGUNTA lo que falta de forma clara
-- Si el usuario da la ubicación pero no el costo, agrega al inventario y pregunta el costo después
-- Si el usuario da el costo pero no la ubicación, pregunta la ubicación ANTES de hacer cualquier acción
+- Para AGREGAR INVENTARIO necesitas OBLIGATORIAMENTE: ubicación Y costo unitario. Si falta CUALQUIERA de los dos, usa action="chat" y pregunta lo que falta. NUNCA ejecutes add_inventory sin tener ambos datos.
+- Si el usuario da ubicación pero NO costo → pregunta "¿Cuánto te costó cada uno?"
+- Si el usuario da costo pero NO ubicación → pregunta "¿En qué canasta o ubicación lo guardaste?"
+- Si faltan ambos → pregunta los dos
+- Cuando el usuario menciona productos de DIFERENTES COLORES o TALLAS en un solo mensaje, crea items SEPARADOS en el array de add_inventory. Ejemplo: "4 buzos, 2 azules y 2 rojos" → 2 items: [{model:"buzo", color:"azul", quantity:2}, {model:"buzo", color:"rojo", quantity:2}]
 - Cada mensaje tuyo debe ser ÚTIL: o ejecuta una acción, o pregunta algo específico que falte`;
 
 export async function POST(request: NextRequest) {
