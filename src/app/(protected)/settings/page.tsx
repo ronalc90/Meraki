@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils'
+import ExcelImport from '@/components/shared/ExcelImport'
 
 interface SectionProps {
   icon: React.ReactNode
@@ -330,6 +331,14 @@ export default function SettingsPage() {
           <p className="mt-3 text-xs text-gray-400">
             La clave se almacena de forma segura. Solo se muestran los últimos 4 caracteres.
           </p>
+        </Section>
+
+        {/* Importar datos */}
+        <Section icon={<Zap className="h-4 w-4" />} title="Importar Datos">
+          <p className="text-xs text-gray-500 mb-3">
+            Sube un archivo Excel (.xlsx) con pedidos, inventario o productos. El sistema detecta el tipo automáticamente.
+          </p>
+          <ExcelImport />
         </Section>
 
         {/* Negocio */}

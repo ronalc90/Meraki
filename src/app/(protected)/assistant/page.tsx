@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Mic, MicOff, Send, Sparkles, Check, X, Loader2, Package, ShoppingBag, Search, MapPin, Printer, Download } from 'lucide-react';
+import { Mic, MicOff, Send, Sparkles, Check, X, Loader2, Package, ShoppingBag, Search, MapPin, Printer, Download, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/lib/UserContext';
@@ -10,11 +10,17 @@ import { formatCurrency, generateOrderCode } from '@/lib/utils';
 import { GuideCard } from '@/components/dispatch/DispatchGuide';
 import { downloadExcel } from '@/lib/export';
 
+interface SubAction {
+  action: string;
+  data?: Record<string, unknown> | Array<Record<string, unknown>>;
+}
+
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   action?: string;
   data?: Record<string, unknown> | Array<Record<string, unknown>>;
+  actions?: SubAction[];
   results?: Array<Record<string, unknown>>;
   needsConfirmation?: boolean;
   confirmed?: boolean;
@@ -23,7 +29,12 @@ interface ChatMessage {
 export default function AssistantPage() {
   const owner = useUser();
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    if (typeof window !== 'undefined') {
+      try { const saved = localStorage.getItem('meraki-chat'); return saved ? JSON.parse(saved) : []; } catch { return []; }
+    }
+    return [];
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [pendingAction, setPendingAction] = useState<ChatMessage | null>(null);
@@ -31,6 +42,13 @@ export default function AssistantPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Persist chat history
+  useEffect(() => {
+    try { localStorage.setItem('meraki-chat', JSON.stringify(messages.slice(-50))); } catch { /* ignore */ }
+  }, [messages]);
+
+  const clearChat = () => { setMessages([]); setPendingAction(null); toast.success('Chat limpiado'); };
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
@@ -58,6 +76,7 @@ export default function AssistantPage() {
         content: data.message || 'Procesado',
         action: data.action,
         data: data.data,
+        actions: data.action === 'multi_action' ? data.actions : undefined,
         results: data.results,
         needsConfirmation: data.needs_confirmation,
       };
@@ -100,336 +119,149 @@ export default function AssistantPage() {
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const execSingleAction = async (action: string, data: any, hasOwner: boolean): Promise<string> => {
+    if (action === 'create_order') {
+      const orderData = data as Record<string, unknown>;
+      const today = new Date();
+      const dateStr = today.toISOString().slice(0, 10);
+      const { data: existing } = await supabase.from('orders').select('id').gte('order_date', dateStr).lte('order_date', dateStr);
+      const seq = (existing?.length || 0) + 1;
+      const orderCode = generateOrderCode(today, seq);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const payload: any = {
+        order_code: orderCode, client_name: orderData.client_name || '', phone: String(orderData.phone || ''),
+        city: String(orderData.city || 'Bogotá'), address: String(orderData.address || ''), complement: String(orderData.complement || ''),
+        product_ref: String(orderData.product_ref || ''), detail: String(orderData.detail || ''), comment: String(orderData.comment || ''),
+        value_to_collect: Number(orderData.value_to_collect) || 0, delivery_status: 'Confirmado', vendor: owner, order_date: dateStr,
+        payment_cash_bogo: 0, payment_cash: 0, payment_transfer: 0, product_cost: 0, operating_cost: 0, prepaid_amount: 0, is_exchange: false,
+      };
+      if (hasOwner) payload.owner = owner;
+      const { error } = await supabase.from('orders').insert(payload);
+      if (error) throw error;
+      const detail = String(orderData.detail || '').toLowerCase();
+      const productRef = String(orderData.product_ref || '').toLowerCase();
+      const orderQty = Number(orderData.quantity) || 1;
+      if (detail || productRef) {
+        const searchTerm = detail || productRef;
+        let invQuery = supabase.from('inventory').select('*').eq('status', 'Bueno').gt('quantity', 0);
+        if (hasOwner) invQuery = invQuery.eq('owner', owner);
+        const { data: invItems } = await invQuery;
+        if (invItems?.length) {
+          const match = invItems.find(i => searchTerm.includes(i.model.toLowerCase()) || i.model.toLowerCase().includes(searchTerm.split(' ')[0]));
+          if (match) await supabase.from('inventory').update({ quantity: Math.max(0, match.quantity - orderQty) }).eq('id', match.id);
+        }
+      }
+      setShowGuide(payload);
+      return `Pedido #${orderCode} guardado para ${orderData.client_name}. Stock actualizado.`;
+    }
+    if (action === 'add_inventory') {
+      const items = (Array.isArray(data) ? data : [data]) as Array<Record<string, unknown>>;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const payloads = items.map(item => { const p: any = { model: item.model || '', category: item.category || 'Pantuflas', product_id: item.product_id || '', color: item.color || '', size: item.size || '', quantity: Number(item.quantity) || 1, basket_location: item.basket_location || '', type: item.type || 'Adulto', observations: item.observations || '', status: 'Bueno', verified: false, reference: 0 }; if (hasOwner) p.owner = owner; return p; });
+      const { error } = await supabase.from('inventory').insert(payloads);
+      if (error) throw error;
+      return `${items.length} item(s) agregados al inventario.`;
+    }
+    if (action === 'mark_defective') {
+      const defData = data as Record<string, unknown>;
+      const model = String(defData.model || '').toLowerCase();
+      const qty = Number(defData.quantity) || 1;
+      let invQuery = supabase.from('inventory').select('*').eq('status', 'Bueno').gt('quantity', 0);
+      if (hasOwner) invQuery = invQuery.eq('owner', owner);
+      if (model) invQuery = invQuery.ilike('model', `%${model}%`);
+      if (defData.color) invQuery = invQuery.ilike('color', `%${String(defData.color)}%`);
+      const { data: invItems } = await invQuery.limit(1);
+      if (invItems?.length) {
+        const item = invItems[0];
+        await supabase.from('inventory').update({ quantity: Math.max(0, item.quantity - qty) }).eq('id', item.id);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const defPayload: any = { model: item.model, category: item.category, product_id: item.product_id, color: item.color, size: item.size, quantity: qty, basket_location: item.basket_location, type: item.type, observations: String(defData.observations || 'Defectuoso'), status: 'Malo', verified: false, reference: 0 };
+        if (hasOwner) defPayload.owner = owner;
+        await supabase.from('inventory').insert(defPayload);
+        return `${qty} unidad(es) de ${item.model} marcadas como defectuosas.`;
+      }
+      return 'No encontré ese producto en inventario.';
+    }
+    if (action === 'return_order') {
+      const retData = data as Record<string, unknown>;
+      let oq = supabase.from('orders').select('*');
+      if (hasOwner) oq = oq.eq('owner', owner);
+      if (retData.order_code) oq = oq.eq('order_code', String(retData.order_code));
+      else if (retData.client_name) oq = oq.ilike('client_name', `%${String(retData.client_name)}%`);
+      const { data: found } = await oq.limit(1);
+      if (found?.length) {
+        const order = found[0];
+        await supabase.from('orders').update({ delivery_status: 'Devolucion', comment: `${order.comment || ''} | Devolución: ${retData.reason || ''}`.trim() }).eq('id', order.id);
+        const detail = (order.detail || order.product_ref || '').toLowerCase();
+        if (detail) { let iq = supabase.from('inventory').select('*').eq('status', 'Bueno'); if (hasOwner) iq = iq.eq('owner', owner); const { data: inv } = await iq; if (inv?.length) { const m = inv.find(i => detail.includes(i.model.toLowerCase()) || i.model.toLowerCase().includes(detail.split(' ')[0])); if (m) await supabase.from('inventory').update({ quantity: m.quantity + 1 }).eq('id', m.id); } }
+        return `Pedido #${order.order_code} de ${order.client_name} → Devolución. Stock restaurado.`;
+      }
+      return 'No encontré ese pedido.';
+    }
+    if (action === 'update_order_status') {
+      const sd = data as Record<string, unknown>;
+      let oq = supabase.from('orders').select('*');
+      if (hasOwner) oq = oq.eq('owner', owner);
+      if (sd.order_code) oq = oq.eq('order_code', String(sd.order_code));
+      else if (sd.client_name) oq = oq.ilike('client_name', `%${String(sd.client_name)}%`);
+      oq = oq.order('created_at', { ascending: false });
+      const { data: found } = await oq.limit(1);
+      if (found?.length) {
+        const order = found[0]; const ns = String(sd.new_status || 'Entregado');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const up: any = { delivery_status: ns }; if (sd.payment_cash) up.payment_cash = Number(sd.payment_cash); if (sd.payment_transfer) up.payment_transfer = Number(sd.payment_transfer);
+        await supabase.from('orders').update(up).eq('id', order.id);
+        if (ns === 'Entregado' && order.delivery_status === 'Confirmado') { const d = (order.detail || order.product_ref || '').toLowerCase(); if (d) { let iq = supabase.from('inventory').select('*').eq('status', 'Bueno').gt('quantity', 0); if (hasOwner) iq = iq.eq('owner', owner); const { data: inv } = await iq; if (inv) { const m = inv.find(i => d.includes(i.model.toLowerCase()) || i.model.toLowerCase().includes(d.split(' ')[0])); if (m) await supabase.from('inventory').update({ quantity: Math.max(0, m.quantity - 1) }).eq('id', m.id); } } }
+        return `Pedido #${order.order_code} de ${order.client_name} → "${ns}".`;
+      }
+      return 'No encontré ese pedido.';
+    }
+    if (action === 'register_expense') {
+      const ed = data as Record<string, unknown>;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const p: any = { description: String(ed.description || ''), amount: Number(ed.amount) || 0, category: String(ed.category || 'otro'), expense_date: new Date().toISOString().slice(0, 10) };
+      if (hasOwner) p.owner = owner; if (ed.order_id) p.order_id = Number(ed.order_id); if (ed.product_ref) p.product_ref = String(ed.product_ref);
+      const { error } = await supabase.from('expenses').insert(p);
+      if (error) return 'Error al registrar gasto: ' + error.message;
+      return `Gasto de ${formatCurrency(Number(ed.amount))} registrado: "${ed.description}".`;
+    }
+    if (action === 'update_cost') {
+      const cd = data as Record<string, unknown>; const model = String(cd.model || '').toLowerCase(); const cost = Number(cd.cost) || 0;
+      let pq = supabase.from('products').select('*'); if (hasOwner) pq = pq.eq('owner', owner); if (model) pq = pq.ilike('name', `%${model}%`);
+      const { data: prods } = await pq.limit(5); let u = 0;
+      if (prods?.length) { for (const p of prods) { await supabase.from('products').update({ cost }).eq('id', p.id); u++; } }
+      let iq = supabase.from('inventory').select('id'); if (hasOwner) iq = iq.eq('owner', owner); if (model) iq = iq.ilike('model', `%${model}%`);
+      const { data: inv } = await iq; if (inv) { for (const i of inv) { await supabase.from('inventory').update({ reference: cost }).eq('id', i.id); } }
+      return `Costo de "${cd.model}" → ${formatCurrency(cost)}.${u > 0 ? ` ${u} producto(s) actualizados.` : ''}`;
+    }
+    return 'Acción no reconocida.';
+  };
+
   const confirmAction = async () => {
     if (!pendingAction) return;
     setIsLoading(true);
 
     try {
       const hasOwner = await isOwnerSupported();
+      const summaries: string[] = [];
 
-      if (pendingAction.action === 'create_order') {
-        const orderData = pendingAction.data as Record<string, unknown>;
-        const today = new Date();
-        const dateStr = today.toISOString().slice(0, 10);
-
-        const { data: existing } = await supabase
-          .from('orders')
-          .select('id')
-          .gte('order_date', dateStr)
-          .lte('order_date', dateStr);
-        const seq = (existing?.length || 0) + 1;
-        const orderCode = generateOrderCode(today, seq);
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const payload: any = {
-          order_code: orderCode,
-          client_name: orderData.client_name || '',
-          phone: String(orderData.phone || ''),
-          city: String(orderData.city || 'Bogotá'),
-          address: String(orderData.address || ''),
-          complement: String(orderData.complement || ''),
-          product_ref: String(orderData.product_ref || ''),
-          detail: String(orderData.detail || ''),
-          comment: String(orderData.comment || ''),
-          value_to_collect: Number(orderData.value_to_collect) || 0,
-          delivery_status: 'Confirmado',
-          vendor: owner,
-          order_date: dateStr,
-          payment_cash_bogo: 0, payment_cash: 0, payment_transfer: 0,
-          product_cost: 0, operating_cost: 0, prepaid_amount: 0,
-          is_exchange: false,
-        };
-        if (hasOwner) payload.owner = owner;
-
-        const { error } = await supabase.from('orders').insert(payload);
-        if (error) throw error;
-
-        // Descontar stock del inventario usando la cantidad del pedido
-        const detail = String(orderData.detail || '').toLowerCase();
-        const productRef = String(orderData.product_ref || '').toLowerCase();
-        const orderQty = Number(orderData.quantity) || 1;
-        if (detail || productRef) {
-          const searchTerm = detail || productRef;
-          let invQuery = supabase.from('inventory').select('*').eq('status', 'Bueno').gt('quantity', 0);
-          if (hasOwner) invQuery = invQuery.eq('owner', owner);
-          const { data: invItems } = await invQuery;
-          if (invItems && invItems.length > 0) {
-            const match = invItems.find(i =>
-              searchTerm.includes(i.model.toLowerCase()) ||
-              i.model.toLowerCase().includes(searchTerm.split(' ')[0])
-            );
-            if (match) {
-              const newQty = Math.max(0, match.quantity - orderQty);
-              await supabase.from('inventory').update({ quantity: newQty }).eq('id', match.id);
-            }
-          }
+      if (pendingAction.action === 'multi_action' && pendingAction.actions) {
+        for (const sub of pendingAction.actions) {
+          const result = await execSingleAction(sub.action, sub.data, hasOwner);
+          summaries.push(result);
         }
-
-        setShowGuide(payload);
-        toast.success('Pedido guardado');
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: `Pedido #${orderCode} guardado para ${orderData.client_name}. Stock actualizado. Puedes imprimir la guía.`,
-          confirmed: true,
-        }]);
+      } else {
+        const result = await execSingleAction(pendingAction.action!, pendingAction.data, hasOwner);
+        summaries.push(result);
       }
 
-      if (pendingAction.action === 'add_inventory') {
-        const items = pendingAction.data as Array<Record<string, unknown>>;
-        const payloads = items.map(item => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const p: any = {
-            model: item.model || '',
-            category: item.category || 'Pantuflas',
-            product_id: item.product_id || '',
-            color: item.color || '',
-            size: item.size || '',
-            quantity: Number(item.quantity) || 1,
-            basket_location: item.basket_location || '',
-            type: item.type || 'Adulto',
-            observations: item.observations || '',
-            status: 'Bueno',
-            verified: false,
-            reference: 0,
-          };
-          if (hasOwner) p.owner = owner;
-          return p;
-        });
-
-        const { error } = await supabase.from('inventory').insert(payloads);
-        if (error) throw error;
-
-        toast.success(`${items.length} item(s) agregados al inventario`);
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: `Listo, ${items.length} item(s) agregados al inventario.`,
-          confirmed: true,
-        }]);
-      }
-
-      if (pendingAction.action === 'mark_defective') {
-        const defData = pendingAction.data as Record<string, unknown>;
-        const model = String(defData.model || '').toLowerCase();
-        const qty = Number(defData.quantity) || 1;
-
-        let invQuery = supabase.from('inventory').select('*').eq('status', 'Bueno').gt('quantity', 0);
-        if (hasOwner) invQuery = invQuery.eq('owner', owner);
-        if (model) invQuery = invQuery.ilike('model', `%${model}%`);
-        if (defData.color) invQuery = invQuery.ilike('color', `%${String(defData.color)}%`);
-        if (defData.size) invQuery = invQuery.ilike('size', `%${String(defData.size)}%`);
-        const { data: invItems } = await invQuery.limit(1);
-
-        if (invItems && invItems.length > 0) {
-          const item = invItems[0];
-          const newQty = Math.max(0, item.quantity - qty);
-          await supabase.from('inventory').update({ quantity: newQty }).eq('id', item.id);
-
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const defPayload: any = {
-            model: item.model,
-            category: item.category,
-            product_id: item.product_id,
-            color: item.color,
-            size: item.size,
-            quantity: qty,
-            basket_location: item.basket_location,
-            type: item.type,
-            observations: String(defData.observations || 'Marcado como defectuoso'),
-            status: 'Malo',
-            verified: false,
-            reference: 0,
-          };
-          if (hasOwner) defPayload.owner = owner;
-          await supabase.from('inventory').insert(defPayload);
-
-          toast.success(`${qty} unidad(es) marcadas como defectuosas`);
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: `Listo. ${qty} unidad(es) de ${item.model} marcadas como defectuosas. Stock actualizado.`,
-            confirmed: true,
-          }]);
-        } else {
-          toast.error('No encontré ese producto en inventario');
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: 'No encontré ese producto en el inventario para marcarlo como defectuoso.',
-          }]);
-        }
-      }
-
-      if (pendingAction.action === 'return_order') {
-        const retData = pendingAction.data as Record<string, unknown>;
-        const orderCode = String(retData.order_code || '');
-        const clientName = String(retData.client_name || '');
-
-        let orderQuery = supabase.from('orders').select('*');
-        if (hasOwner) orderQuery = orderQuery.eq('owner', owner);
-        if (orderCode) {
-          orderQuery = orderQuery.eq('order_code', orderCode);
-        } else if (clientName) {
-          orderQuery = orderQuery.ilike('client_name', `%${clientName}%`);
-        }
-        const { data: foundOrders } = await orderQuery.limit(1);
-
-        if (foundOrders && foundOrders.length > 0) {
-          const order = foundOrders[0];
-          await supabase.from('orders')
-            .update({ delivery_status: 'Devolucion', comment: `${order.comment || ''} | Devolución: ${retData.reason || 'Sin razón'}`.trim() })
-            .eq('id', order.id);
-
-          // Restaurar stock: buscar producto en inventario y sumar cantidad
-          const detail = (order.detail || order.product_ref || '').toLowerCase();
-          if (detail) {
-            let invQuery = supabase.from('inventory').select('*').eq('status', 'Bueno');
-            if (hasOwner) invQuery = invQuery.eq('owner', owner);
-            const { data: invItems } = await invQuery;
-            if (invItems && invItems.length > 0) {
-              const match = invItems.find(i =>
-                detail.includes(i.model.toLowerCase()) ||
-                i.model.toLowerCase().includes(detail.split(' ')[0])
-              );
-              if (match) {
-                await supabase.from('inventory').update({ quantity: match.quantity + 1 }).eq('id', match.id);
-              }
-            }
-          }
-
-          toast.success('Devolución registrada');
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: `Pedido #${order.order_code} de ${order.client_name} marcado como devolución. Stock restaurado.`,
-            confirmed: true,
-          }]);
-        } else {
-          toast.error('No encontré ese pedido');
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: 'No encontré el pedido para registrar la devolución. Verifica el código o nombre del cliente.',
-          }]);
-        }
-      }
-
-      if (pendingAction.action === 'update_order_status') {
-        const statusData = pendingAction.data as Record<string, unknown>;
-        const orderCode = String(statusData.order_code || '');
-        const clientName = String(statusData.client_name || '');
-        const newStatus = String(statusData.new_status || 'Entregado');
-
-        let orderQuery = supabase.from('orders').select('*');
-        if (hasOwner) orderQuery = orderQuery.eq('owner', owner);
-        if (orderCode) {
-          orderQuery = orderQuery.eq('order_code', orderCode);
-        } else if (clientName) {
-          orderQuery = orderQuery.ilike('client_name', `%${clientName}%`);
-        }
-        orderQuery = orderQuery.order('created_at', { ascending: false });
-        const { data: foundOrders } = await orderQuery.limit(1);
-
-        if (foundOrders && foundOrders.length > 0) {
-          const order = foundOrders[0];
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const updatePayload: any = { delivery_status: newStatus };
-          if (statusData.payment_cash) updatePayload.payment_cash = Number(statusData.payment_cash);
-          if (statusData.payment_transfer) updatePayload.payment_transfer = Number(statusData.payment_transfer);
-
-          await supabase.from('orders').update(updatePayload).eq('id', order.id);
-
-          // If marking as delivered, deduct stock
-          if (newStatus === 'Entregado' && order.delivery_status === 'Confirmado') {
-            const detail = (order.detail || order.product_ref || '').toLowerCase();
-            if (detail) {
-              let invQ = supabase.from('inventory').select('*').eq('status', 'Bueno').gt('quantity', 0);
-              if (hasOwner) invQ = invQ.eq('owner', owner);
-              const { data: inv } = await invQ;
-              if (inv) {
-                const match = inv.find(i => detail.includes(i.model.toLowerCase()) || i.model.toLowerCase().includes(detail.split(' ')[0]));
-                if (match) await supabase.from('inventory').update({ quantity: Math.max(0, match.quantity - 1) }).eq('id', match.id);
-              }
-            }
-          }
-
-          toast.success(`Pedido actualizado a ${newStatus}`);
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: `Pedido #${order.order_code} de ${order.client_name} actualizado a "${newStatus}".`,
-            confirmed: true,
-          }]);
-        } else {
-          toast.error('No encontré ese pedido');
-          setMessages(prev => [...prev, { role: 'assistant', content: 'No encontré el pedido para actualizar.' }]);
-        }
-      }
-
-      if (pendingAction.action === 'register_expense') {
-        const expData = pendingAction.data as Record<string, unknown>;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const payload: any = {
-          description: String(expData.description || ''),
-          amount: Number(expData.amount) || 0,
-          category: String(expData.category || 'otro'),
-          expense_date: new Date().toISOString().slice(0, 10),
-        };
-        if (hasOwner) payload.owner = owner;
-        if (expData.order_id) payload.order_id = Number(expData.order_id);
-        if (expData.product_ref) payload.product_ref = String(expData.product_ref);
-
-        const { error } = await supabase.from('expenses').insert(payload);
-        if (error) {
-          // Table might not exist yet
-          toast.error('Tabla de gastos no encontrada. Ejecuta la migración SQL.');
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: 'No pude guardar el gasto. La tabla "expenses" no existe aún. Pídele a Ronald que ejecute el SQL de migración en Supabase.',
-          }]);
-        } else {
-          toast.success('Gasto registrado');
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: `Gasto de ${formatCurrency(Number(expData.amount))} registrado: "${expData.description}".`,
-            confirmed: true,
-          }]);
-        }
-      }
-
-      if (pendingAction.action === 'update_cost') {
-        const costData = pendingAction.data as Record<string, unknown>;
-        const model = String(costData.model || '').toLowerCase();
-        const cost = Number(costData.cost) || 0;
-
-        // Update cost in products table
-        let prodQuery = supabase.from('products').select('*');
-        if (hasOwner) prodQuery = prodQuery.eq('owner', owner);
-        if (model) prodQuery = prodQuery.ilike('name', `%${model}%`);
-        const { data: products } = await prodQuery.limit(5);
-
-        let updated = 0;
-        if (products && products.length > 0) {
-          for (const p of products) {
-            await supabase.from('products').update({ cost }).eq('id', p.id);
-            updated++;
-          }
-        }
-
-        // Also update reference cost in matching inventory items
-        let invQuery = supabase.from('inventory').select('id');
-        if (hasOwner) invQuery = invQuery.eq('owner', owner);
-        if (model) invQuery = invQuery.ilike('model', `%${model}%`);
-        if (costData.color) invQuery = invQuery.ilike('color', `%${String(costData.color)}%`);
-        if (costData.size) invQuery = invQuery.ilike('size', `%${String(costData.size)}%`);
-        const { data: invItems } = await invQuery;
-        if (invItems) {
-          for (const item of invItems) {
-            await supabase.from('inventory').update({ reference: cost }).eq('id', item.id);
-          }
-        }
-
-        toast.success('Costo actualizado');
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: `Costo de "${costData.model}" actualizado a ${formatCurrency(cost)}.${updated > 0 ? ` ${updated} producto(s) en catálogo actualizados.` : ''}`,
-          confirmed: true,
-        }]);
-      }
+      toast.success('Acciones ejecutadas');
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: summaries.join('\n'),
+        confirmed: true,
+      }]);
 
       setPendingAction(null);
     } catch (err: unknown) {
@@ -528,10 +360,15 @@ export default function AssistantPage() {
           <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center shrink-0">
             <Sparkles className="w-4 h-4 md:w-5 md:h-5 text-white" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h1 className="font-bold text-sm md:text-lg leading-tight">Asistente Meraki</h1>
             <p className="text-[10px] md:text-xs text-gray-500 truncate">Pedidos, inventario, consultas</p>
           </div>
+          {messages.length > 0 && (
+            <button onClick={clearChat} className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition" title="Limpiar chat">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
