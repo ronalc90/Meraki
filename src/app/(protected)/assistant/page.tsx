@@ -26,6 +26,89 @@ interface ChatMessage {
   confirmed?: boolean;
 }
 
+interface PhotoState { preview?: string; uploading?: boolean; imageUrl?: string }
+
+function compressImage(file: File, maxWidth = 800): Promise<string> {
+  return new Promise((resolve) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d')!;
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxWidth / img.width);
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function PhotoBeforeConfirm({ state, onStateChange, onSkip }: {
+  state: PhotoState;
+  onStateChange: (s: PhotoState) => void;
+  onSkip: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = async (file: File) => {
+    const compressed = await compressImage(file);
+    onStateChange({ preview: compressed, uploading: true });
+    try {
+      const res = await fetch('/api/upload-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: compressed, folder: 'products' }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error);
+      onStateChange({ preview: compressed, uploading: false, imageUrl: d.url });
+      toast.success('Foto lista');
+    } catch {
+      toast.error('Error al subir foto');
+      onStateChange({});
+    }
+  };
+
+  return (
+    <div className="mx-2 md:mx-4 mb-1 p-3 bg-purple-50 border border-purple-200 rounded-xl animate-fadeIn shrink-0">
+      <p className="text-xs font-semibold text-purple-800 mb-2">¿Agregar foto del producto?</p>
+      {state.preview ? (
+        <div className="relative rounded-xl overflow-hidden mb-2">
+          <img src={state.preview} alt="Preview" className="w-full h-32 object-cover" />
+          {state.uploading && (
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-white" />
+            </div>
+          )}
+          {state.imageUrl && (
+            <div className="absolute bottom-2 right-2 bg-green-500 text-white rounded-full p-1.5">
+              <Check className="w-3.5 h-3.5" />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex gap-2 mb-2">
+          <button type="button" onClick={() => fileRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-dashed border-purple-200 text-xs font-medium text-purple-600 hover:bg-purple-100 transition active:scale-95">
+            📸 Tomar foto
+          </button>
+          <button type="button" onClick={() => galleryRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-dashed border-purple-200 text-xs font-medium text-purple-600 hover:bg-purple-100 transition active:scale-95">
+            🖼️ Galería
+          </button>
+        </div>
+      )}
+      <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />
+      <input ref={galleryRef} type="file" accept="image/*" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />
+      <button onClick={onSkip} className="w-full py-1.5 text-xs text-gray-400 hover:text-gray-600 transition">
+        {state.imageUrl ? 'Continuar →' : 'Sin foto, continuar →'}
+      </button>
+    </div>
+  );
+}
+
 export default function AssistantPage() {
   const owner = useUser();
   const [input, setInput] = useState('');
@@ -34,7 +117,7 @@ export default function AssistantPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [pendingAction, setPendingAction] = useState<ChatMessage | null>(null);
   const [showGuide, setShowGuide] = useState<Record<string, unknown> | null>(null);
-  const [preConfirmPhoto, setPreConfirmPhoto] = useState<{ preview?: string; uploading?: boolean; imageUrl?: string } | null>(null);
+  const [preConfirmPhoto, setPreConfirmPhoto] = useState<PhotoState | null>(null);
   const [chatLoaded, setChatLoaded] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
@@ -521,71 +604,11 @@ export default function AssistantPage() {
 
       {/* Photo prompt BEFORE confirmation (for inventory actions) */}
       {pendingAction && preConfirmPhoto !== null && (
-        <div className="mx-2 md:mx-4 mb-1 p-3 bg-purple-50 border border-purple-200 rounded-xl animate-fadeIn shrink-0">
-          <p className="text-xs font-semibold text-purple-800 mb-2">
-            ¿Agregar foto del producto?
-          </p>
-          {preConfirmPhoto.preview ? (
-            <div className="relative rounded-xl overflow-hidden mb-2">
-              <img src={preConfirmPhoto.preview} alt="Preview" className="w-full h-32 object-cover" />
-              {preConfirmPhoto.uploading && (
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                  <Loader2 className="w-6 h-6 animate-spin text-white" />
-                </div>
-              )}
-              {preConfirmPhoto.imageUrl && (
-                <div className="absolute bottom-2 right-2 bg-green-500 text-white rounded-full p-1">
-                  <Check className="w-3 h-3" />
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex gap-2 mb-2">
-              <label className="flex-1 flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-dashed border-purple-200 text-xs font-medium text-purple-600 cursor-pointer hover:bg-purple-100 transition active:scale-95">
-                <span>📸 Tomar foto</span>
-                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => {
-                  const file = e.target.files?.[0]; if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = async () => {
-                    const base64 = reader.result as string;
-                    setPreConfirmPhoto({ preview: base64, uploading: true });
-                    try {
-                      const res = await fetch('/api/upload-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: base64, folder: 'products' }) });
-                      const d = await res.json(); if (!res.ok) throw new Error(d.error);
-                      setPreConfirmPhoto({ preview: base64, uploading: false, imageUrl: d.url });
-                      toast.success('Foto lista');
-                    } catch { toast.error('Error al subir foto'); setPreConfirmPhoto({}); }
-                  };
-                  reader.readAsDataURL(file);
-                }} />
-              </label>
-              <label className="flex-1 flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-dashed border-purple-200 text-xs font-medium text-purple-600 cursor-pointer hover:bg-purple-100 transition active:scale-95">
-                <span>🖼️ Galería</span>
-                <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-                  const file = e.target.files?.[0]; if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = async () => {
-                    const base64 = reader.result as string;
-                    setPreConfirmPhoto({ preview: base64, uploading: true });
-                    try {
-                      const res = await fetch('/api/upload-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: base64, folder: 'products' }) });
-                      const d = await res.json(); if (!res.ok) throw new Error(d.error);
-                      setPreConfirmPhoto({ preview: base64, uploading: false, imageUrl: d.url });
-                      toast.success('Foto lista');
-                    } catch { toast.error('Error al subir foto'); setPreConfirmPhoto({}); }
-                  };
-                  reader.readAsDataURL(file);
-                }} />
-              </label>
-            </div>
-          )}
-          <button
-            onClick={() => setPreConfirmPhoto(null)}
-            className="w-full py-1.5 text-xs text-gray-400 hover:text-gray-600 transition"
-          >
-            {preConfirmPhoto.imageUrl ? 'Continuar →' : 'Sin foto, continuar →'}
-          </button>
-        </div>
+        <PhotoBeforeConfirm
+          state={preConfirmPhoto}
+          onStateChange={setPreConfirmPhoto}
+          onSkip={() => setPreConfirmPhoto(null)}
+        />
       )}
 
       {/* Confirmation bar (shows after photo step or for non-inventory actions) */}
