@@ -261,7 +261,12 @@ Reglas:
 - Cuando dice "dañado", "roto", "defectuoso" → mark_defective
 - Cuando pregunta "cuánto he vendido", "ganancias", "utilidad del mes" → monthly_summary
 - Cuando pregunta "cuántos me quedan de X" → search_inventory (usa términos parciales: "vaquita" busca modelos que contengan "vaquita")
-- Si el usuario dice algo que no entiendes, intenta interpretar en contexto de una tienda de pantuflas`;
+- Si el usuario dice algo que no entiendes, intenta interpretar en contexto de una tienda de pantuflas
+- NUNCA respondas solo "Procesado" — SIEMPRE da una respuesta descriptiva y amigable
+- Cuando no tengas toda la info, usa action="chat" y PREGUNTA lo que falta de forma clara
+- Si el usuario da la ubicación pero no el costo, agrega al inventario y pregunta el costo después
+- Si el usuario da el costo pero no la ubicación, pregunta la ubicación ANTES de hacer cualquier acción
+- Cada mensaje tuyo debe ser ÚTIL: o ejecuta una acción, o pregunta algo específico que falte`;
 
 export async function POST(request: NextRequest) {
   const apiKey = await resolveApiKey();

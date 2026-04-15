@@ -86,18 +86,23 @@ export default function AssistantPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
+      // Force confirmation for actions that modify data
+      const modifyingActions = ['create_order', 'add_inventory', 'mark_defective', 'return_order',
+        'update_order_status', 'register_expense', 'update_cost', 'multi_action'];
+      const needsConf = data.needs_confirmation || modifyingActions.includes(data.action);
+
       const assistantMsg: ChatMessage = {
         role: 'assistant',
-        content: data.message || 'Procesado',
+        content: data.message || (data.action === 'chat' ? 'No entendí, ¿puedes repetirlo?' : '¿Confirmas esta acción?'),
         action: data.action,
         data: data.data,
         actions: data.action === 'multi_action' ? data.actions : undefined,
         results: data.results,
-        needsConfirmation: data.needs_confirmation,
+        needsConfirmation: needsConf,
       };
       setMessages(prev => [...prev, assistantMsg]);
 
-      if (data.needs_confirmation) {
+      if (needsConf) {
         setPendingAction(assistantMsg);
       }
 
