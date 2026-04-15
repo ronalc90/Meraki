@@ -126,6 +126,7 @@ export default function AssistantPage() {
   const [pendingAction, setPendingAction] = useState<ChatMessage | null>(null);
   const [showGuide, setShowGuide] = useState<Record<string, unknown> | null>(null);
   const [preConfirmPhoto, setPreConfirmPhoto] = useState<PhotoState | null>(null);
+  const [photoStepDone, setPhotoStepDone] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Record<string, unknown> | null>(null);
   const [chatLoaded, setChatLoaded] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -200,6 +201,9 @@ export default function AssistantPage() {
           (data.action === 'multi_action' && data.actions?.some((a: SubAction) => a.action === 'add_inventory'));
         if (hasInventory) {
           setPreConfirmPhoto({});
+          setPhotoStepDone(false);
+        } else {
+          setPhotoStepDone(true);
         }
         setPendingAction(assistantMsg);
       }
@@ -390,6 +394,7 @@ export default function AssistantPage() {
 
       setPendingAction(null);
       setPreConfirmPhoto(null);
+      setPhotoStepDone(false);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Error al guardar');
     } finally {
@@ -401,6 +406,7 @@ export default function AssistantPage() {
   const rejectAction = () => {
     setPendingAction(null);
     setPreConfirmPhoto(null);
+    setPhotoStepDone(false);
     setMessages(prev => [...prev, {
       role: 'assistant',
       content: 'Entendido. Puedes corregir y enviarme de nuevo.',
@@ -589,8 +595,8 @@ export default function AssistantPage() {
                     <button
                       key={j}
                       type="button"
-                      onClick={() => setSelectedItem(r)}
-                      className="w-full p-2 bg-white rounded-lg text-xs border border-gray-200 text-left hover:bg-purple-50 hover:border-purple-200 transition flex items-center gap-2"
+                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); setSelectedItem(r); }}
+                      className="w-full p-2 bg-white rounded-lg text-xs border border-gray-200 text-left hover:bg-purple-50 hover:border-purple-200 transition flex items-center gap-2 cursor-pointer active:bg-purple-100"
                     >
                       {r.image_url ? <img src={String(r.image_url)} alt="" className="w-8 h-8 rounded object-cover shrink-0" /> : null}
                       <div className="min-w-0 flex-1">
@@ -629,16 +635,16 @@ export default function AssistantPage() {
       </div>
 
       {/* Photo prompt BEFORE confirmation (for inventory actions) */}
-      {pendingAction && preConfirmPhoto !== null && (
+      {pendingAction && !photoStepDone && preConfirmPhoto !== null && (
         <PhotoBeforeConfirm
           state={preConfirmPhoto}
           onStateChange={setPreConfirmPhoto}
-          onSkip={() => setPreConfirmPhoto(null)}
+          onSkip={() => setPhotoStepDone(true)}
         />
       )}
 
-      {/* Confirmation bar (shows after photo step or for non-inventory actions) */}
-      {pendingAction && preConfirmPhoto === null && (
+      {/* Confirmation bar (shows after photo step) */}
+      {pendingAction && photoStepDone && (
         <div className="mx-2 md:mx-4 mb-1 p-2 md:p-3 bg-yellow-50 border border-yellow-200 rounded-xl animate-fadeIn shrink-0">
           <p className="text-xs md:text-sm font-semibold text-yellow-800 mb-1.5">¿Confirmar esta acción?</p>
           <div className="flex gap-2">
