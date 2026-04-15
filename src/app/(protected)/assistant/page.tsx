@@ -34,7 +34,7 @@ export default function AssistantPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [pendingAction, setPendingAction] = useState<ChatMessage | null>(null);
   const [showGuide, setShowGuide] = useState<Record<string, unknown> | null>(null);
-  const [photoPrompt, setPhotoPrompt] = useState<{ model: string; ids: number[]; preview?: string; uploading?: boolean } | null>(null);
+  const [preConfirmPhoto, setPreConfirmPhoto] = useState<{ preview?: string; uploading?: boolean; imageUrl?: string } | null>(null);
   const [chatLoaded, setChatLoaded] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
@@ -103,6 +103,12 @@ export default function AssistantPage() {
       setMessages(prev => [...prev, assistantMsg]);
 
       if (needsConf) {
+        // Check if action involves inventory → ask for photo first
+        const hasInventory = data.action === 'add_inventory' ||
+          (data.action === 'multi_action' && data.actions?.some((a: SubAction) => a.action === 'add_inventory'));
+        if (hasInventory) {
+          setPreConfirmPhoto({});
+        }
         setPendingAction(assistantMsg);
       }
 
@@ -177,15 +183,13 @@ export default function AssistantPage() {
     }
     if (action === 'add_inventory') {
       const items = (Array.isArray(data) ? data : [data]) as Array<Record<string, unknown>>;
+      const imgUrl = preConfirmPhoto?.imageUrl || '';
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const payloads = items.map(item => { const p: any = { model: item.model || '', category: item.category || 'Pantuflas', product_id: item.product_id || '', color: item.color || '', size: item.size || '', quantity: Number(item.quantity) || 1, basket_location: item.basket_location || '', type: item.type || 'Adulto', observations: item.observations || '', status: 'Bueno', verified: false, reference: 0 }; if (hasOwner) p.owner = owner; return p; });
-      const { data: inserted, error } = await supabase.from('inventory').insert(payloads).select('id');
+      const payloads = items.map(item => { const p: any = { model: item.model || '', category: item.category || 'Pantuflas', product_id: item.product_id || '', color: item.color || '', size: item.size || '', quantity: Number(item.quantity) || 1, basket_location: item.basket_location || '', type: item.type || 'Adulto', observations: item.observations || '', status: 'Bueno', verified: false, reference: 0, image_url: imgUrl }; if (hasOwner) p.owner = owner; return p; });
+      const { error } = await supabase.from('inventory').insert(payloads);
       if (error) throw error;
-      // Offer photo capture for the new items
-      const modelName = String(items[0]?.model || 'producto');
-      const ids = (inserted || []).map((r: { id: number }) => r.id);
-      if (ids.length > 0) setPhotoPrompt({ model: modelName, ids });
-      return `${items.length} item(s) agregados al inventario.`;
+      setPreConfirmPhoto(null);
+      return `${items.length} item(s) agregados al inventario.${imgUrl ? ' Con foto.' : ''}`;
     }
     if (action === 'mark_defective') {
       const defData = data as Record<string, unknown>;
@@ -293,6 +297,7 @@ export default function AssistantPage() {
       }]);
 
       setPendingAction(null);
+      setPreConfirmPhoto(null);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Error al guardar');
     } finally {
@@ -303,6 +308,7 @@ export default function AssistantPage() {
 
   const rejectAction = () => {
     setPendingAction(null);
+    setPreConfirmPhoto(null);
     setMessages(prev => [...prev, {
       role: 'assistant',
       content: 'Entendido. Puedes corregir y enviarme de nuevo.',
@@ -513,8 +519,77 @@ export default function AssistantPage() {
         <div ref={chatEndRef} />
       </div>
 
-      {/* Confirmation bar */}
-      {pendingAction && (
+      {/* Photo prompt BEFORE confirmation (for inventory actions) */}
+      {pendingAction && preConfirmPhoto !== null && (
+        <div className="mx-2 md:mx-4 mb-1 p-3 bg-purple-50 border border-purple-200 rounded-xl animate-fadeIn shrink-0">
+          <p className="text-xs font-semibold text-purple-800 mb-2">
+            ¿Agregar foto del producto?
+          </p>
+          {preConfirmPhoto.preview ? (
+            <div className="relative rounded-xl overflow-hidden mb-2">
+              <img src={preConfirmPhoto.preview} alt="Preview" className="w-full h-32 object-cover" />
+              {preConfirmPhoto.uploading && (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                  <Loader2 className="w-6 h-6 animate-spin text-white" />
+                </div>
+              )}
+              {preConfirmPhoto.imageUrl && (
+                <div className="absolute bottom-2 right-2 bg-green-500 text-white rounded-full p-1">
+                  <Check className="w-3 h-3" />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex gap-2 mb-2">
+              <label className="flex-1 flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-dashed border-purple-200 text-xs font-medium text-purple-600 cursor-pointer hover:bg-purple-100 transition active:scale-95">
+                <span>📸 Tomar foto</span>
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => {
+                  const file = e.target.files?.[0]; if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = async () => {
+                    const base64 = reader.result as string;
+                    setPreConfirmPhoto({ preview: base64, uploading: true });
+                    try {
+                      const res = await fetch('/api/upload-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: base64, folder: 'products' }) });
+                      const d = await res.json(); if (!res.ok) throw new Error(d.error);
+                      setPreConfirmPhoto({ preview: base64, uploading: false, imageUrl: d.url });
+                      toast.success('Foto lista');
+                    } catch { toast.error('Error al subir foto'); setPreConfirmPhoto({}); }
+                  };
+                  reader.readAsDataURL(file);
+                }} />
+              </label>
+              <label className="flex-1 flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-dashed border-purple-200 text-xs font-medium text-purple-600 cursor-pointer hover:bg-purple-100 transition active:scale-95">
+                <span>🖼️ Galería</span>
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                  const file = e.target.files?.[0]; if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = async () => {
+                    const base64 = reader.result as string;
+                    setPreConfirmPhoto({ preview: base64, uploading: true });
+                    try {
+                      const res = await fetch('/api/upload-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: base64, folder: 'products' }) });
+                      const d = await res.json(); if (!res.ok) throw new Error(d.error);
+                      setPreConfirmPhoto({ preview: base64, uploading: false, imageUrl: d.url });
+                      toast.success('Foto lista');
+                    } catch { toast.error('Error al subir foto'); setPreConfirmPhoto({}); }
+                  };
+                  reader.readAsDataURL(file);
+                }} />
+              </label>
+            </div>
+          )}
+          <button
+            onClick={() => setPreConfirmPhoto(null)}
+            className="w-full py-1.5 text-xs text-gray-400 hover:text-gray-600 transition"
+          >
+            {preConfirmPhoto.imageUrl ? 'Continuar →' : 'Sin foto, continuar →'}
+          </button>
+        </div>
+      )}
+
+      {/* Confirmation bar (shows after photo step or for non-inventory actions) */}
+      {pendingAction && preConfirmPhoto === null && (
         <div className="mx-2 md:mx-4 mb-1 p-2 md:p-3 bg-yellow-50 border border-yellow-200 rounded-xl animate-fadeIn shrink-0">
           <p className="text-xs md:text-sm font-semibold text-yellow-800 mb-1.5">¿Confirmar esta acción?</p>
           <div className="flex gap-2">
@@ -525,80 +600,6 @@ export default function AssistantPage() {
               <X className="w-3.5 h-3.5" /> Corregir
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Photo prompt after adding inventory */}
-      {photoPrompt && (
-        <div className="mx-2 md:mx-4 mb-1 p-3 bg-purple-50 border border-purple-200 rounded-xl animate-fadeIn shrink-0">
-          <p className="text-xs font-semibold text-purple-800 mb-2">
-            Agregar foto de {photoPrompt.model}
-          </p>
-          {photoPrompt.preview ? (
-            <div className="relative rounded-xl overflow-hidden mb-2">
-              <img src={photoPrompt.preview} alt="Preview" className="w-full h-32 object-cover" />
-              {photoPrompt.uploading && (
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                  <Loader2 className="w-6 h-6 animate-spin text-white" />
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex gap-2 mb-2">
-              <label className="flex-1 flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-dashed border-purple-200 text-xs font-medium text-purple-600 cursor-pointer hover:bg-purple-100 transition active:scale-95">
-                <span>📸 Tomar foto</span>
-                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = async () => {
-                    const base64 = reader.result as string;
-                    setPhotoPrompt(prev => prev ? { ...prev, preview: base64, uploading: true } : null);
-                    try {
-                      const res = await fetch('/api/upload-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: base64, folder: 'products' }) });
-                      const data = await res.json();
-                      if (!res.ok) throw new Error(data.error);
-                      for (const id of photoPrompt.ids) { await supabase.from('inventory').update({ image_url: data.url }).eq('id', id); }
-                      toast.success('Foto guardada');
-                      setMessages(prev => [...prev, { role: 'assistant', content: 'Foto agregada al producto.', confirmed: true }]);
-                      setPhotoPrompt(null);
-                    } catch { toast.error('Error al subir foto'); setPhotoPrompt(prev => prev ? { ...prev, preview: undefined, uploading: false } : null); }
-                    scrollToBottom();
-                  };
-                  reader.readAsDataURL(file);
-                }} />
-              </label>
-              <label className="flex-1 flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-dashed border-purple-200 text-xs font-medium text-purple-600 cursor-pointer hover:bg-purple-100 transition active:scale-95">
-                <span>🖼️ Galería</span>
-                <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = async () => {
-                    const base64 = reader.result as string;
-                    setPhotoPrompt(prev => prev ? { ...prev, preview: base64, uploading: true } : null);
-                    try {
-                      const res = await fetch('/api/upload-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: base64, folder: 'products' }) });
-                      const data = await res.json();
-                      if (!res.ok) throw new Error(data.error);
-                      for (const id of photoPrompt.ids) { await supabase.from('inventory').update({ image_url: data.url }).eq('id', id); }
-                      toast.success('Foto guardada');
-                      setMessages(prev => [...prev, { role: 'assistant', content: 'Foto agregada al producto.', confirmed: true }]);
-                      setPhotoPrompt(null);
-                    } catch { toast.error('Error al subir foto'); setPhotoPrompt(prev => prev ? { ...prev, preview: undefined, uploading: false } : null); }
-                    scrollToBottom();
-                  };
-                  reader.readAsDataURL(file);
-                }} />
-              </label>
-            </div>
-          )}
-          <button
-            onClick={() => setPhotoPrompt(null)}
-            className="w-full py-1.5 text-xs text-gray-400 hover:text-gray-600 transition"
-          >
-            Omitir
-          </button>
         </div>
       )}
 
