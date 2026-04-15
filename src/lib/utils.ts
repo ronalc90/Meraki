@@ -14,6 +14,16 @@ export function formatCurrency(value: number): string {
   }).format(value);
 }
 
+export function whatsappUrl(phone: string, message?: string): string {
+  // Normalize Colombian phone: remove spaces, dashes, dots
+  let clean = phone.replace(/[\s\-\.()]/g, '');
+  // Add country code if missing
+  if (clean.startsWith('3') && clean.length === 10) clean = '57' + clean;
+  if (!clean.startsWith('+') && !clean.startsWith('57')) clean = '57' + clean;
+  const url = `https://wa.me/${clean}`;
+  return message ? `${url}?text=${encodeURIComponent(message)}` : url;
+}
+
 export function formatDate(date: string | Date): string {
   return new Intl.DateTimeFormat('es-CO', {
     year: 'numeric',

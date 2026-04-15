@@ -21,6 +21,7 @@ import { cn, formatCurrency } from '@/lib/utils'
 import { useUser } from '@/lib/UserContext'
 import { isOwnerSupported } from '@/lib/db'
 import { GuideCard } from '@/components/dispatch/DispatchGuide'
+import WhatsAppLink from '@/components/shared/WhatsAppLink'
 
 function todayISO(): string {
   const d = new Date()
@@ -231,7 +232,7 @@ function RouteView({
                     </td>
                     <td className="border border-gray-300 px-2 py-1">{order.client_name}</td>
                     <td className="border border-gray-300 px-2 py-1">{order.address}</td>
-                    <td className="border border-gray-300 px-2 py-1">{order.phone}</td>
+                    <td className="border border-gray-300 px-2 py-1"><WhatsAppLink phone={order.phone} className="text-green-600 hover:underline" /></td>
                     <td className="border border-gray-300 px-2 py-1">{order.product_ref}</td>
                     <td className="border border-gray-300 px-2 py-1 text-right font-semibold">
                       {formatCurrency(order.value_to_collect)}
@@ -311,7 +312,7 @@ function RouteView({
                             </p>
                             <p className="text-xs text-gray-500 mt-0.5">{order.address}</p>
                             <p className="text-xs text-gray-400">
-                              {order.phone} · {order.product_ref}
+                              <WhatsAppLink phone={order.phone} className="text-green-600 hover:underline" /> · {order.product_ref}
                             </p>
                           </div>
                           <span
@@ -481,7 +482,7 @@ export default function DispatchPage() {
                       )}
                       <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-400">
                         <span>#{order.order_code}</span>
-                        <span>{order.phone}</span>
+                        <WhatsAppLink phone={order.phone} className="text-green-600 hover:underline" />
                         {order.product_ref && <span>{order.product_ref}</span>}
                         {order.detail && <span className="text-gray-500">{order.detail}</span>}
                       </div>

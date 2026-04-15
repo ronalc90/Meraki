@@ -23,6 +23,7 @@ import type { Order, DailyKPIs } from '@/lib/types'
 import { cn, formatCurrency, getDayOfWeek } from '@/lib/utils'
 import { useUser } from '@/lib/UserContext'
 import { isOwnerSupported } from '@/lib/db'
+import WhatsAppLink from '@/components/shared/WhatsAppLink'
 
 const DELIVERY_STATUS_OPTIONS = ['Confirmado', 'Entregado', 'Devolucion', 'Cancelado'] as const
 const DELIVERY_TYPE_OPTIONS = ['Bogo', 'Bodega', 'Otros', ''] as const
@@ -131,7 +132,7 @@ function OrderTableRow({ order, onUpdate }: OrderRowBaseProps) {
       </td>
       <td className="px-4 py-3">
         <div className="font-medium text-gray-800 text-sm leading-tight">{order.client_name}</div>
-        <div className="text-xs text-gray-400">{order.phone}</div>
+        <WhatsAppLink phone={order.phone} className="text-xs text-green-600 hover:text-green-700 hover:underline" />
       </td>
       <td className="px-4 py-3 text-xs text-gray-600 max-w-[140px] truncate">{order.address}</td>
       <td className="px-4 py-3 text-xs text-gray-600 max-w-[160px]">
@@ -232,7 +233,7 @@ function OrderMobileCard({ order, onUpdate }: OrderRowBaseProps) {
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div>
               <p className="text-gray-500">Teléfono</p>
-              <p className="font-medium text-gray-800">{order.phone}</p>
+              <WhatsAppLink phone={order.phone} className="font-medium text-green-600 hover:text-green-700 underline decoration-green-300 underline-offset-2" />
             </div>
             <div>
               <p className="text-gray-500">Ciudad</p>
