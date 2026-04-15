@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Mic, MicOff, Send, Sparkles, Check, X, Loader2, Package, ShoppingBag, Search, MapPin, Printer, Download, Trash2 } from 'lucide-react';
+import { Mic, MicOff, Send, Sparkles, Check, X, Loader2, Package, ShoppingBag, Search, MapPin, Printer, Download, Trash2, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/lib/UserContext';
@@ -126,6 +126,7 @@ export default function AssistantPage() {
   const [pendingAction, setPendingAction] = useState<ChatMessage | null>(null);
   const [showGuide, setShowGuide] = useState<Record<string, unknown> | null>(null);
   const [preConfirmPhoto, setPreConfirmPhoto] = useState<PhotoState | null>(null);
+  const [selectedItem, setSelectedItem] = useState<Record<string, unknown> | null>(null);
   const [chatLoaded, setChatLoaded] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
@@ -581,27 +582,32 @@ export default function AssistantPage() {
                 );
               })()}
 
-              {/* Search results */}
+              {/* Search results — clickable */}
               {msg.results && msg.results.length > 0 && (
                 <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
                   {msg.results.slice(0, 10).map((r, j) => (
-                    <div key={j} className="p-2 bg-white rounded-lg text-xs border border-gray-200">
-                      {/* Inventory results */}
-                      {r.model ? <span className="font-medium">{String(r.model)}</span> : null}
-                      {/* Order results */}
-                      {r.client_name ? <span className="font-medium">{String(r.client_name)}</span> : null}
-                      {/* Product results */}
-                      {r.code && !r.model && !r.client_name ? <span className="font-medium font-mono text-purple-600">{String(r.code)}</span> : null}
-                      {r.name && !r.model && !r.client_name ? <span className="font-medium"> {String(r.name)}</span> : null}
-                      {r.color ? <span> {String(r.color)}</span> : null}
-                      {r.size ? <span> T.{String(r.size)}</span> : null}
-                      {r.quantity ? <span> Cant: {String(r.quantity)}</span> : null}
-                      {r.basket_location ? <span> {String(r.basket_location)}</span> : null}
-                      {r.cost && !r.value_to_collect ? <span className="ml-1 text-green-600">{formatCurrency(Number(r.cost))}</span> : null}
-                      {r.value_to_collect ? <span> {formatCurrency(Number(r.value_to_collect))}</span> : null}
-                      {r.delivery_status ? <span className="ml-1 text-purple-600">[{String(r.delivery_status)}]</span> : null}
-                      {r.category && !r.model ? <span className="ml-1 text-gray-400">({String(r.category)})</span> : null}
-                    </div>
+                    <button
+                      key={j}
+                      type="button"
+                      onClick={() => setSelectedItem(r)}
+                      className="w-full p-2 bg-white rounded-lg text-xs border border-gray-200 text-left hover:bg-purple-50 hover:border-purple-200 transition flex items-center gap-2"
+                    >
+                      {r.image_url ? <img src={String(r.image_url)} alt="" className="w-8 h-8 rounded object-cover shrink-0" /> : null}
+                      <div className="min-w-0 flex-1">
+                        {r.model ? <span className="font-medium">{String(r.model)}</span> : null}
+                        {r.client_name ? <span className="font-medium">{String(r.client_name)}</span> : null}
+                        {r.code && !r.model && !r.client_name ? <span className="font-medium font-mono text-purple-600">{String(r.code)}</span> : null}
+                        {r.name && !r.model && !r.client_name ? <span className="font-medium"> {String(r.name)}</span> : null}
+                        {r.color ? <span> {String(r.color)}</span> : null}
+                        {r.size ? <span> T.{String(r.size)}</span> : null}
+                        {r.quantity ? <span> Cant: {String(r.quantity)}</span> : null}
+                        {r.basket_location ? <span> {String(r.basket_location)}</span> : null}
+                        {r.cost && !r.value_to_collect ? <span className="ml-1 text-green-600">{formatCurrency(Number(r.cost))}</span> : null}
+                        {r.value_to_collect ? <span> {formatCurrency(Number(r.value_to_collect))}</span> : null}
+                        {r.delivery_status ? <span className="ml-1 text-purple-600">[{String(r.delivery_status)}]</span> : null}
+                      </div>
+                      <ChevronRight className="w-3 h-3 text-gray-400 shrink-0" />
+                    </button>
                   ))}
                 </div>
               )}
@@ -711,6 +717,58 @@ export default function AssistantPage() {
               <button onClick={() => window.print()} className="flex-[2] flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold text-white shadow-md hover:-translate-y-0.5 transition-all" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #9061f9 100%)' }}>
                 <Printer className="w-4 h-4" /> Imprimir
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Product/Item Detail Modal */}
+      {selectedItem && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-end md:items-center justify-center" onClick={() => setSelectedItem(null)}>
+          <div className="bg-white rounded-t-2xl md:rounded-2xl w-full max-w-sm max-h-[85dvh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+            {/* Photo */}
+            {selectedItem.image_url ? (
+              <div className="w-full h-48 bg-gray-100 rounded-t-2xl md:rounded-t-2xl overflow-hidden">
+                <img src={String(selectedItem.image_url)} alt="" className="w-full h-full object-cover" />
+              </div>
+            ) : null}
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900 text-lg">
+                {String(selectedItem.model || selectedItem.client_name || selectedItem.name || 'Detalle')}
+              </h3>
+              <button onClick={() => setSelectedItem(null)} className="p-1.5 rounded-lg hover:bg-gray-100">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            {/* Details */}
+            <div className="overflow-y-auto flex-1 p-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                {Object.entries(selectedItem)
+                  .filter(([k, v]) => v && !['id', 'created_at', 'owner', 'image_url'].includes(k))
+                  .map(([k, v]) => {
+                    const labels: Record<string, string> = {
+                      model: 'Modelo', color: 'Color', size: 'Talla', quantity: 'Cantidad',
+                      basket_location: 'Canasta', category: 'Categoría', type: 'Tipo',
+                      status: 'Estado', observations: 'Observaciones', reference: 'Costo ref.',
+                      product_id: 'ID Producto', verified: 'Verificado',
+                      client_name: 'Cliente', phone: 'Teléfono', address: 'Dirección',
+                      complement: 'Complemento', detail: 'Detalle', comment: 'Comentario',
+                      value_to_collect: 'Valor', delivery_status: 'Estado',
+                      order_code: 'Código', order_date: 'Fecha', vendor: 'Vendedor',
+                      product_ref: 'Referencia', code: 'Código', name: 'Nombre', cost: 'Costo',
+                    };
+                    const label = labels[k] || k;
+                    const isMoneyField = ['value_to_collect', 'cost', 'reference', 'payment_cash', 'payment_transfer'].includes(k);
+                    const display = isMoneyField ? formatCurrency(Number(v)) :
+                      typeof v === 'boolean' ? (v ? 'Sí' : 'No') : String(v);
+                    return (
+                      <div key={k} className={k === 'address' || k === 'detail' || k === 'observations' ? 'col-span-2' : ''}>
+                        <p className="text-xs text-gray-400">{label}</p>
+                        <p className="font-medium text-gray-800">{display}</p>
+                      </div>
+                    );
+                  })}
+              </div>
             </div>
           </div>
         </div>
