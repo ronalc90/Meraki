@@ -269,7 +269,9 @@ Reglas:
 - Si el usuario da costo pero NO ubicación → pregunta "¿En qué canasta o ubicación lo guardaste?"
 - Si faltan ambos → pregunta los dos
 - Cuando el usuario menciona productos de DIFERENTES COLORES o TALLAS en un solo mensaje, crea items SEPARADOS en el array de add_inventory. Ejemplo: "4 buzos, 2 azules y 2 rojos" → 2 items: [{model:"buzo", color:"azul", quantity:2}, {model:"buzo", color:"rojo", quantity:2}]
-- Cada mensaje tuyo debe ser ÚTIL: o ejecuta una acción, o pregunta algo específico que falte`;
+- Cada mensaje tuyo debe ser ÚTIL: o ejecuta una acción, o pregunta algo específico que falte
+- VALIDACIÓN DE VOZ: El usuario habla por voz y el reconocimiento puede cometer errores. Si el nombre del producto suena raro, no existe, o no tiene sentido (ej: "te desarmadas", "pan tu fa", "baco cool"), PREGUNTA al usuario para confirmar: "¿Quisiste decir [sugerencia]? Escuché '[lo que recibiste]'". Productos válidos de la tienda: pantuflas, maxisacos, almohadas, buzos, maletas, pocillos, bolsos, accesorios. Si no reconoces el producto, pregunta.
+- Errores comunes de voz: "te desarmadas" → probablemente "almohadas", "pan tu fa" → "pantufla", "baco cool" → "maxisaco cool", "barita" → "vaquita". Usa el contexto para deducir.`;
 
 export async function POST(request: NextRequest) {
   const apiKey = await resolveApiKey();
