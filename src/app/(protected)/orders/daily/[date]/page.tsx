@@ -74,6 +74,7 @@ function KPIItem({ label, value, small }: KPIItemProps) {
 
 function computeKPIs(orders: Order[]): DailyKPIs {
   const delivered = orders.filter((o) => o.delivery_status === 'Entregado')
+  const active = orders.filter((o) => o.delivery_status === 'Confirmado' || o.delivery_status === 'Entregado')
   return {
     totalOrders: orders.length,
     deliveredBogo: orders.filter((o) => o.delivery_status === 'Entregado' && o.delivery_type === 'Bogo').length,
@@ -87,11 +88,11 @@ function computeKPIs(orders: Order[]): DailyKPIs {
     revenueTransfer: delivered.reduce((s, o) => s + (o.payment_transfer ?? 0), 0),
     totalRevenue: delivered.reduce((s, o) => s + (o.value_to_collect ?? 0), 0),
     ordersPaola: orders.filter((o) => o.vendor === 'Paola').length,
-    totalCosts: orders.reduce((s, o) => s + (o.product_cost ?? 0), 0),
-    totalOperatingCosts: orders.reduce((s, o) => s + (o.operating_cost ?? 0), 0),
+    totalCosts: active.reduce((s, o) => s + (o.product_cost ?? 0), 0),
+    totalOperatingCosts: active.reduce((s, o) => s + (o.operating_cost ?? 0), 0),
     profit:
-      delivered.reduce((s, o) => s + (o.value_to_collect ?? 0), 0) -
-      orders.reduce((s, o) => s + (o.product_cost ?? 0) + (o.operating_cost ?? 0), 0),
+      active.reduce((s, o) => s + (o.value_to_collect ?? 0), 0) -
+      active.reduce((s, o) => s + (o.product_cost ?? 0) + (o.operating_cost ?? 0), 0),
   }
 }
 

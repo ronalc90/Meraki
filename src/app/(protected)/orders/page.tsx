@@ -336,17 +336,12 @@ export default function OrdersPage({
                 </div>
               )}
             </div>
-            {kpiOrders.length > 0 && (kpiFilter === 'recaudo' || kpiFilter === 'utilidad') && (
+            {kpiOrders.length > 0 && (
               <div className="px-4 py-3 border-t border-gray-100 shrink-0 bg-gray-50">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">
-                    {kpiFilter === 'recaudo' ? 'Total recaudo' : 'Utilidad'}
-                  </span>
+                  <span className="text-gray-500">{kpiOrders.length} pedido(s)</span>
                   <span className="font-bold text-gray-900">
-                    {kpiFilter === 'recaudo'
-                      ? formatCurrency(totalRevenue)
-                      : formatCurrency(profit)
-                    }
+                    {formatCurrency(kpiOrders.reduce((s, o) => s + (o.value_to_collect ?? 0), 0))}
                   </span>
                 </div>
               </div>

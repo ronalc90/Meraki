@@ -9,7 +9,6 @@ import { isOwnerSupported } from '@/lib/db';
 import { formatCurrency, generateOrderCode } from '@/lib/utils';
 import { GuideCard } from '@/components/dispatch/DispatchGuide';
 import { downloadExcel } from '@/lib/export';
-import PhotoCapture from '@/components/shared/PhotoCapture';
 
 interface SubAction {
   action: string;
@@ -35,7 +34,7 @@ export default function AssistantPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [pendingAction, setPendingAction] = useState<ChatMessage | null>(null);
   const [showGuide, setShowGuide] = useState<Record<string, unknown> | null>(null);
-  const [photoPrompt, setPhotoPrompt] = useState<{ model: string; ids: number[] } | null>(null);
+  const [photoPrompt, setPhotoPrompt] = useState<{ model: string; ids: number[]; preview?: string; uploading?: boolean } | null>(null);
   const [chatLoaded, setChatLoaded] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
@@ -268,15 +267,20 @@ export default function AssistantPage() {
 
       if (pendingAction.action === 'multi_action' && pendingAction.actions) {
         for (const sub of pendingAction.actions) {
-          const result = await execSingleAction(sub.action, sub.data, hasOwner);
-          summaries.push(result);
+          try {
+            const result = await execSingleAction(sub.action, sub.data, hasOwner);
+            summaries.push('✓ ' + result);
+          } catch (e: unknown) {
+            summaries.push('✗ ' + sub.action + ': ' + (e instanceof Error ? e.message : 'Error'));
+          }
         }
       } else {
         const result = await execSingleAction(pendingAction.action!, pendingAction.data, hasOwner);
         summaries.push(result);
       }
 
-      toast.success('Acciones ejecutadas');
+      const hasErrors = summaries.some(s => s.startsWith('✗'));
+      toast[hasErrors ? 'error' : 'success'](hasErrors ? 'Algunas acciones fallaron' : 'Acciones ejecutadas');
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: summaries.join('\n'),
@@ -523,26 +527,72 @@ export default function AssistantPage() {
       {photoPrompt && (
         <div className="mx-2 md:mx-4 mb-1 p-3 bg-purple-50 border border-purple-200 rounded-xl animate-fadeIn shrink-0">
           <p className="text-xs font-semibold text-purple-800 mb-2">
-            ¿Quieres tomar foto de {photoPrompt.model}?
+            Agregar foto de {photoPrompt.model}
           </p>
-          <PhotoCapture
-            onPhotoReady={async (url) => {
-              if (url) {
-                for (const id of photoPrompt.ids) {
-                  await supabase.from('inventory').update({ image_url: url }).eq('id', id);
-                }
-                toast.success('Foto guardada en inventario');
-                setMessages(prev => [...prev, { role: 'assistant', content: 'Foto agregada al producto en inventario.', confirmed: true }]);
-              }
-              setPhotoPrompt(null);
-              scrollToBottom();
-            }}
-          />
+          {photoPrompt.preview ? (
+            <div className="relative rounded-xl overflow-hidden mb-2">
+              <img src={photoPrompt.preview} alt="Preview" className="w-full h-32 object-cover" />
+              {photoPrompt.uploading && (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                  <Loader2 className="w-6 h-6 animate-spin text-white" />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex gap-2 mb-2">
+              <label className="flex-1 flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-dashed border-purple-200 text-xs font-medium text-purple-600 cursor-pointer hover:bg-purple-100 transition active:scale-95">
+                <span>📸 Tomar foto</span>
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = async () => {
+                    const base64 = reader.result as string;
+                    setPhotoPrompt(prev => prev ? { ...prev, preview: base64, uploading: true } : null);
+                    try {
+                      const res = await fetch('/api/upload-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: base64, folder: 'products' }) });
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error);
+                      for (const id of photoPrompt.ids) { await supabase.from('inventory').update({ image_url: data.url }).eq('id', id); }
+                      toast.success('Foto guardada');
+                      setMessages(prev => [...prev, { role: 'assistant', content: 'Foto agregada al producto.', confirmed: true }]);
+                      setPhotoPrompt(null);
+                    } catch { toast.error('Error al subir foto'); setPhotoPrompt(prev => prev ? { ...prev, preview: undefined, uploading: false } : null); }
+                    scrollToBottom();
+                  };
+                  reader.readAsDataURL(file);
+                }} />
+              </label>
+              <label className="flex-1 flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-dashed border-purple-200 text-xs font-medium text-purple-600 cursor-pointer hover:bg-purple-100 transition active:scale-95">
+                <span>🖼️ Galería</span>
+                <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = async () => {
+                    const base64 = reader.result as string;
+                    setPhotoPrompt(prev => prev ? { ...prev, preview: base64, uploading: true } : null);
+                    try {
+                      const res = await fetch('/api/upload-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: base64, folder: 'products' }) });
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error);
+                      for (const id of photoPrompt.ids) { await supabase.from('inventory').update({ image_url: data.url }).eq('id', id); }
+                      toast.success('Foto guardada');
+                      setMessages(prev => [...prev, { role: 'assistant', content: 'Foto agregada al producto.', confirmed: true }]);
+                      setPhotoPrompt(null);
+                    } catch { toast.error('Error al subir foto'); setPhotoPrompt(prev => prev ? { ...prev, preview: undefined, uploading: false } : null); }
+                    scrollToBottom();
+                  };
+                  reader.readAsDataURL(file);
+                }} />
+              </label>
+            </div>
+          )}
           <button
             onClick={() => setPhotoPrompt(null)}
-            className="mt-2 w-full text-xs text-gray-500 hover:text-gray-700 transition"
+            className="w-full py-1.5 text-xs text-gray-400 hover:text-gray-600 transition"
           >
-            Omitir foto
+            Omitir
           </button>
         </div>
       )}

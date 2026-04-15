@@ -268,6 +268,7 @@ export default function InventoryPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editItem, setEditItem] = useState<InventoryItem | null>(null)
   const [saving, setSaving] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<InventoryItem | null>(null)
 
   const loadItems = useCallback(async () => {
     setLoading(true)
@@ -346,7 +347,6 @@ export default function InventoryPage() {
   }
 
   async function handleDelete(id: number) {
-    if (!confirm('¿Eliminar este producto del inventario?')) return
     try {
       const { error } = await supabase.from('inventory').delete().eq('id', id)
       if (error) throw error
@@ -554,7 +554,7 @@ export default function InventoryPage() {
                             <Edit2 className="h-3.5 w-3.5" />
                           </button>
                           <button
-                            onClick={() => handleDelete(item.id)}
+                            onClick={() => setDeleteConfirm(item)}
                             className="rounded-lg p-1.5 hover:bg-red-100 text-red-500"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -606,7 +606,7 @@ export default function InventoryPage() {
                           <Edit2 className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => handleDelete(item.id)}
+                          onClick={() => setDeleteConfirm(item)}
                           className="rounded-lg p-1.5 hover:bg-red-100 text-red-500"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -654,6 +654,31 @@ export default function InventoryPage() {
           onSave={handleSave}
           saving={saving}
         />
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => setDeleteConfirm(null)}>
+          <div className="w-full max-w-xs bg-white rounded-2xl shadow-xl p-6 text-center" onClick={e => e.stopPropagation()}>
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-3">
+              <Trash2 className="w-6 h-6 text-red-500" />
+            </div>
+            <h3 className="font-bold text-gray-900 mb-1">¿Eliminar producto?</h3>
+            <p className="text-sm text-gray-500 mb-1">{deleteConfirm.model} {deleteConfirm.color}</p>
+            <p className="text-xs text-gray-400 mb-4">Cantidad: {deleteConfirm.quantity} · {deleteConfirm.basket_location}</p>
+            <div className="flex gap-2">
+              <button onClick={() => setDeleteConfirm(null)} className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition">
+                Cancelar
+              </button>
+              <button
+                onClick={async () => { await handleDelete(deleteConfirm.id); setDeleteConfirm(null); }}
+                className="flex-1 rounded-xl py-2.5 text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
