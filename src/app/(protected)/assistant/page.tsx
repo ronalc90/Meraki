@@ -29,26 +29,40 @@ interface ChatMessage {
 export default function AssistantPage() {
   const owner = useUser();
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    if (typeof window !== 'undefined') {
-      try { const saved = localStorage.getItem('meraki-chat'); return saved ? JSON.parse(saved) : []; } catch { return []; }
-    }
-    return [];
-  });
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [pendingAction, setPendingAction] = useState<ChatMessage | null>(null);
   const [showGuide, setShowGuide] = useState<Record<string, unknown> | null>(null);
+  const [chatLoaded, setChatLoaded] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Persist chat history
+  // Load chat history from localStorage on mount
   useEffect(() => {
-    try { localStorage.setItem('meraki-chat', JSON.stringify(messages.slice(-50))); } catch { /* ignore */ }
-  }, [messages]);
+    try {
+      const saved = localStorage.getItem('meraki-chat');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed);
+      }
+    } catch { /* ignore */ }
+    setChatLoaded(true);
+  }, []);
 
-  const clearChat = () => { setMessages([]); setPendingAction(null); toast.success('Chat limpiado'); };
+  // Persist chat history when it changes (only after initial load)
+  useEffect(() => {
+    if (!chatLoaded) return;
+    try { localStorage.setItem('meraki-chat', JSON.stringify(messages.slice(-100))); } catch { /* ignore */ }
+  }, [messages, chatLoaded]);
+
+  const clearChat = () => {
+    setMessages([]);
+    setPendingAction(null);
+    localStorage.removeItem('meraki-chat');
+    toast.success('Chat limpiado');
+  };
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
