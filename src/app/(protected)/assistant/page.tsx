@@ -28,17 +28,25 @@ interface ChatMessage {
 
 interface PhotoState { preview?: string; uploading?: boolean; imageUrl?: string }
 
-function compressImage(file: File, maxWidth = 800): Promise<string> {
+function compressImage(file: File, maxWidth = 600): Promise<string> {
   return new Promise((resolve) => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d')!;
     const img = new Image();
     img.onload = () => {
-      const scale = Math.min(1, maxWidth / img.width);
+      const scale = Math.min(1, maxWidth / Math.max(img.width, img.height));
       canvas.width = img.width * scale;
       canvas.height = img.height * scale;
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.7));
+      // Target ~500KB max - reduce quality until small enough
+      let quality = 0.6;
+      let result = canvas.toDataURL('image/jpeg', quality);
+      while (result.length > 700000 && quality > 0.2) {
+        quality -= 0.1;
+        result = canvas.toDataURL('image/jpeg', quality);
+      }
+      resolve(result);
+      URL.revokeObjectURL(img.src);
     };
     img.src = URL.createObjectURL(file);
   });
@@ -548,18 +556,30 @@ export default function AssistantPage() {
               )}
 
               {/* Inventory items preview */}
-              {msg.action === 'add_inventory' && Array.isArray(msg.data) && (
+              {(msg.action === 'add_inventory' || msg.action === 'multi_action') && (() => {
+                // Extract inventory items from data or from multi_action sub-actions
+                let items: Array<Record<string, unknown>> = [];
+                if (msg.action === 'add_inventory' && msg.data) {
+                  items = Array.isArray(msg.data) ? msg.data : [msg.data];
+                } else if (msg.action === 'multi_action' && msg.actions) {
+                  const invAction = msg.actions.find(a => a.action === 'add_inventory');
+                  if (invAction?.data) items = Array.isArray(invAction.data) ? invAction.data : [invAction.data];
+                }
+                items = items.filter(i => i.model || i.quantity);
+                if (!items.length) return null;
+                return (
                 <div className="mt-2 space-y-1">
-                  {(msg.data as Array<Record<string, unknown>>).map((item, j) => (
+                  {items.map((item, j) => (
                     <div key={j} className="p-2 bg-green-50 rounded-lg text-xs border border-green-100">
-                      <span className="font-medium">{String(item.quantity)}x {String(item.model)}</span>
+                      <span className="font-medium">{item.quantity ? `${item.quantity}x ` : ''}{item.model ? String(item.model) : 'Producto'}</span>
                       {item.color ? <span> {String(item.color)}</span> : null}
                       {item.size ? <span> T.{String(item.size)}</span> : null}
                       {item.basket_location ? <span> → {String(item.basket_location)}</span> : null}
                     </div>
                   ))}
                 </div>
-              )}
+                );
+              })()}
 
               {/* Search results */}
               {msg.results && msg.results.length > 0 && (
