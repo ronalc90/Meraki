@@ -247,6 +247,8 @@ Reglas:
 - Para CREAR PEDIDO: incluye la cantidad en el campo "detail" (ej: "2 pantuflas vaquita blanca talla 38")
 - Para CREAR PEDIDO: incluye "quantity" en data (número de unidades, default 1). Si no se menciona cantidad, asume 1.
 - NUNCA pidas la cantidad si no se menciona — asume 1 por defecto
+- Para AGREGAR INVENTARIO: la ubicación/canasta (basket_location) es OBLIGATORIA. Si no se menciona, usa action="chat" y pregunta "¿En qué canasta o ubicación lo guardaste?"
+- Para multi_action que incluya add_inventory: si falta la ubicación, pregunta ANTES de ejecutar cualquier acción
 - Talla: "38" → "38-39", "36" → "36-37", "40" → "40-41"
 - Ciudad por defecto: Bogotá
 - Producto: "vaquita","vaca" → PANT, "maxisaco","cool" → MAX, "clásica" → PANT, "stitch" → PANT
