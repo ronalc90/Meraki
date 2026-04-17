@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Mic, MicOff, Send, Sparkles, Check, X, Loader2, Package, ShoppingBag, Search, MapPin, Download, Trash2, ChevronRight } from 'lucide-react';
+import { Mic, MicOff, Send, Sparkles, Check, X, Loader2, Package, ShoppingBag, Search, MapPin, Download, Trash2, ChevronRight, HelpCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/lib/UserContext';
 import { isOwnerSupported } from '@/lib/db';
 import { formatCurrency, generateOrderCode, parseCopAmount } from '@/lib/utils';
 import DispatchGuide from '@/components/dispatch/DispatchGuide';
+import AssistantHelpModal from '@/components/assistant/AssistantHelpModal';
 import { downloadExcel } from '@/lib/export';
 
 interface SubAction {
@@ -129,6 +130,7 @@ export default function AssistantPage() {
   const [photoStepDone, setPhotoStepDone] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Record<string, unknown> | null>(null);
   const [chatLoaded, setChatLoaded] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -554,6 +556,14 @@ export default function AssistantPage() {
             <h1 className="font-bold text-sm md:text-lg leading-tight">Asistente Meraki</h1>
             <p className="text-[10px] md:text-xs text-gray-500 truncate">Pedidos, inventario, consultas</p>
           </div>
+          <button
+            onClick={() => setHelpOpen(true)}
+            className="p-2 rounded-lg hover:bg-purple-50 text-gray-400 hover:text-purple-600 transition"
+            title="¿Qué puedo hacer?"
+            aria-label="Ayuda del asistente"
+          >
+            <HelpCircle className="w-4 h-4" />
+          </button>
           {messages.length > 0 && (
             <button onClick={clearChat} className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition" title="Limpiar chat">
               <Trash2 className="w-4 h-4" />
@@ -561,6 +571,8 @@ export default function AssistantPage() {
           )}
         </div>
       </div>
+
+      {helpOpen && <AssistantHelpModal onClose={() => setHelpOpen(false)} />}
 
       {/* Chat area */}
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3 min-h-0">

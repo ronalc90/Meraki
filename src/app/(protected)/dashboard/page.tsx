@@ -247,47 +247,53 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-4 shadow-sm">
-        <div className="mx-auto max-w-5xl flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-xs text-gray-500">Tu Tienda Meraki</p>
+      <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 shadow-sm">
+        <div className="mx-auto max-w-5xl flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+          {/* Title + month on mobile (stacked) */}
+          <div className="flex items-center justify-between gap-2 sm:gap-3">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">Dashboard</h1>
+              <p className="text-[11px] sm:text-xs text-gray-500">Tu Tienda Meraki</p>
+            </div>
+            {/* Month selector — aligned right inside the title row */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={prevMonth}
+                className="rounded-lg border border-gray-200 p-1.5 hover:bg-gray-50 transition-colors"
+                aria-label="Mes anterior"
+              >
+                <ChevronLeft className="h-4 w-4 text-gray-600" />
+              </button>
+              <span className="min-w-[96px] sm:min-w-[140px] text-center text-xs sm:text-sm font-semibold text-gray-900">
+                {MONTH_NAMES[month - 1]} {year}
+              </span>
+              <button
+                onClick={nextMonth}
+                className="rounded-lg border border-gray-200 p-1.5 hover:bg-gray-50 transition-colors"
+                aria-label="Mes siguiente"
+              >
+                <ChevronRight className="h-4 w-4 text-gray-600" />
+              </button>
+            </div>
           </div>
-          {/* Month selector + Export */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={prevMonth}
-              className="rounded-xl border border-gray-200 p-2 hover:bg-gray-50 transition-colors"
-            >
-              <ChevronLeft className="h-4 w-4 text-gray-600" />
-            </button>
-            <span className="min-w-[140px] text-center text-sm font-semibold text-gray-900">
-              {MONTH_NAMES[month - 1]} {year}
-            </span>
-            <button
-              onClick={nextMonth}
-              className="rounded-xl border border-gray-200 p-2 hover:bg-gray-50 transition-colors"
-            >
-              <ChevronRight className="h-4 w-4 text-gray-600" />
-            </button>
-            <button
-              onClick={async () => {
-                try {
-                  await downloadExcel('dashboard', {
-                    month: String(month),
-                    year: String(year),
-                    owner,
-                  })
-                } catch {
-                  toast.error('Error al exportar')
-                }
-              }}
-              className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-colors"
-            >
-              <Download className="h-4 w-4" />
-              <span className="hidden sm:inline">Exportar</span>
-            </button>
-          </div>
+          {/* Export (own row on mobile, inline on desktop) */}
+          <button
+            onClick={async () => {
+              try {
+                await downloadExcel('dashboard', {
+                  month: String(month),
+                  year: String(year),
+                  owner,
+                })
+              } catch {
+                toast.error('Error al exportar')
+              }
+            }}
+            className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-colors"
+          >
+            <Download className="h-4 w-4" />
+            <span>Exportar</span>
+          </button>
         </div>
       </div>
 
