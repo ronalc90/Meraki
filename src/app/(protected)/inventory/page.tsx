@@ -16,7 +16,7 @@ import {
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import type { InventoryItem } from '@/lib/types'
-import { cn } from '@/lib/utils'
+import { cn, formatCurrency } from '@/lib/utils'
 import { downloadExcel } from '@/lib/export'
 import { useUser } from '@/lib/UserContext'
 import { isOwnerSupported } from '@/lib/db'
@@ -137,12 +137,14 @@ function InventoryModal({ item, onClose, onSave, saving }: ModalProps) {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Referencia</label>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Costo (COP)</label>
             <input
               type="number"
+              min={0}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
               value={form.reference}
-              onChange={(e) => set('reference', Number(e.target.value))}
+              onChange={(e) => set('reference', Math.max(0, Number(e.target.value) || 0))}
+              placeholder="45000"
             />
           </div>
 
@@ -509,7 +511,7 @@ export default function InventoryPage() {
                     <th className="px-4 py-3 text-left font-semibold">ID Producto</th>
                     <th className="px-4 py-3 text-left font-semibold">Categoría</th>
                     <th className="px-4 py-3 text-left font-semibold">Tipo</th>
-                    <th className="px-4 py-3 text-left font-semibold">Referencia</th>
+                    <th className="px-4 py-3 text-left font-semibold">Costo</th>
                     <th className="px-4 py-3 text-left font-semibold">Modelo</th>
                     <th className="px-4 py-3 text-left font-semibold">Color</th>
                     <th className="px-4 py-3 text-left font-semibold">Talla</th>
@@ -528,7 +530,7 @@ export default function InventoryPage() {
                       <td className="px-4 py-3 font-mono text-xs text-gray-700">{item.product_id}</td>
                       <td className="px-4 py-3 text-gray-700">{item.category}</td>
                       <td className="px-4 py-3 text-gray-700">{item.type}</td>
-                      <td className="px-4 py-3 text-gray-700">{item.reference}</td>
+                      <td className="px-4 py-3 text-gray-700">{formatCurrency(item.reference || 0)}</td>
                       <td className="px-4 py-3 font-medium text-gray-900">{item.model}</td>
                       <td className="px-4 py-3 text-gray-700">{item.color}</td>
                       <td className="px-4 py-3 text-gray-700">{item.size}</td>
@@ -593,7 +595,7 @@ export default function InventoryPage() {
                         <span>Categoría: <strong className="text-gray-700">{item.category}</strong></span>
                         <span>Color: <strong className="text-gray-700">{item.color}</strong></span>
                         <span>Talla: <strong className="text-gray-700">{item.size}</strong></span>
-                        <span>Ref: <strong className="text-gray-700">{item.reference}</strong></span>
+                        <span>Costo: <strong className="text-gray-700">{formatCurrency(item.reference || 0)}</strong></span>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2">
