@@ -334,7 +334,10 @@ export default function AssistantPage() {
       if (found?.length) {
         const order = found[0]; const ns = String(sd.new_status || 'Entregado');
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const up: any = { delivery_status: ns }; if (sd.payment_cash) up.payment_cash = Number(sd.payment_cash); if (sd.payment_transfer) up.payment_transfer = Number(sd.payment_transfer);
+        const up: any = { delivery_status: ns };
+        if (sd.payment_cash_bogo) up.payment_cash_bogo = Number(sd.payment_cash_bogo);
+        if (sd.payment_cash) up.payment_cash = Number(sd.payment_cash);
+        if (sd.payment_transfer) up.payment_transfer = Number(sd.payment_transfer);
         await supabase.from('orders').update(up).eq('id', order.id);
         if (ns === 'Entregado' && order.delivery_status === 'Confirmado') { const d = (order.detail || order.product_ref || '').toLowerCase(); if (d) { let iq = supabase.from('inventory').select('*').eq('status', 'Bueno').gt('quantity', 0); if (hasOwner) iq = iq.eq('owner', owner); const { data: inv } = await iq; if (inv) { const m = inv.find(i => d.includes(i.model.toLowerCase()) || i.model.toLowerCase().includes(d.split(' ')[0])); if (m) await supabase.from('inventory').update({ quantity: Math.max(0, m.quantity - 1) }).eq('id', m.id); } } }
         return `Pedido #${order.order_code} de ${order.client_name} → "${ns}".`;

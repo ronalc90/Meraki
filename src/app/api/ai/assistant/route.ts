@@ -163,12 +163,14 @@ Para CAMBIAR ESTADO DE PEDIDO:
     "order_code": "string o null",
     "client_name": "string o null (busca por nombre si no hay código)",
     "new_status": "Confirmado|Entregado|Devolucion|Cancelado",
-    "payment_cash": number o null (monto en efectivo si se entrega),
-    "payment_transfer": number o null (monto transferencia si se entrega)
+    "payment_cash_bogo": number o null (contraentrega por transportadora Bogo),
+    "payment_cash": number o null (efectivo directo en caja),
+    "payment_transfer": number o null (transferencia bancaria)
   },
   "message": "resumen amigable",
   "needs_confirmation": true
 }
+IMPORTANTE: Si new_status es "Entregado" y NO se especificó método de pago, usa action="chat" y pregunta: "¿Cómo pagó el cliente? Por favor indícame el monto en Bogo (contraentrega), Caja (efectivo) o Transferencia."
 
 Para REGISTRAR COSTO de mercancía (actualizar precio de costo en inventario):
 {

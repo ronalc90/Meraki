@@ -302,6 +302,54 @@ function OrderMobileCard({ order, onUpdate }: OrderRowBaseProps) {
             </div>
           </div>
 
+          {/* Payment methods — visible when delivered */}
+          {order.delivery_status === 'Entregado' && (
+            <div className="pt-2 border-t border-gray-100">
+              <p className="text-[10px] font-semibold text-gray-500 uppercase mb-2">Método de pago</p>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-0.5">
+                  <label className="block text-[10px] text-gray-500">Bogo</label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={order.payment_cash_bogo || ''}
+                    onChange={(e) => handleChange('payment_cash_bogo', Number(e.target.value) || 0)}
+                    disabled={saving}
+                    placeholder="0"
+                    className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs outline-none"
+                  />
+                </div>
+                <div className="space-y-0.5">
+                  <label className="block text-[10px] text-gray-500">Caja</label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={order.payment_cash || ''}
+                    onChange={(e) => handleChange('payment_cash', Number(e.target.value) || 0)}
+                    disabled={saving}
+                    placeholder="0"
+                    className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs outline-none"
+                  />
+                </div>
+                <div className="space-y-0.5">
+                  <label className="block text-[10px] text-gray-500">Transferencia</label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={order.payment_transfer || ''}
+                    onChange={(e) => handleChange('payment_transfer', Number(e.target.value) || 0)}
+                    disabled={saving}
+                    placeholder="0"
+                    className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs outline-none"
+                  />
+                </div>
+              </div>
+              <p className="mt-1 text-[10px] text-gray-400">
+                Valor a cobrar: {formatCurrency(order.value_to_collect)} · Registrado: {formatCurrency((order.payment_cash_bogo || 0) + (order.payment_cash || 0) + (order.payment_transfer || 0))}
+              </p>
+            </div>
+          )}
+
           {saving && (
             <p className="text-xs text-purple-500 text-center">Guardando...</p>
           )}
