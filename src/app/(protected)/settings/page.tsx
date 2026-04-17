@@ -17,9 +17,11 @@ import {
   Eye,
   EyeOff,
   Zap,
+  Info,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils'
+import { APP_VERSION } from '@/lib/version'
 import ExcelImport from '@/components/shared/ExcelImport'
 
 interface SectionProps {
@@ -363,6 +365,21 @@ export default function SettingsPage() {
           <p className="mt-3 text-xs text-gray-400">
             Para modificar datos del negocio, contacta al administrador.
           </p>
+        </Section>
+
+        {/* Acerca de */}
+        <Section icon={<Info className="h-4 w-4" />} title="Acerca de">
+          <dl className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <dt className="text-sm text-gray-500">Versión</dt>
+              <dd className="text-sm font-mono font-semibold text-gray-900">
+                {APP_VERSION}
+              </dd>
+            </div>
+            <p className="pt-1 text-xs text-gray-400">
+              Cada nuevo cambio entregado sube la versión 0.001.
+            </p>
+          </dl>
         </Section>
 
         {/* Cerrar sesión */}
