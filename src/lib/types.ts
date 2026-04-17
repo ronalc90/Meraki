@@ -27,7 +27,7 @@ export interface Order {
   product_cost: number;
   delivery_type: 'Bogo' | 'Bodega' | 'Otros' | '';
   vendor: string;
-  delivery_status: 'Confirmado' | 'Entregado' | 'Devolucion' | 'Cancelado';
+  delivery_status: 'Confirmado' | 'Enviado' | 'Entregado' | 'Pagado' | 'Devolucion' | 'Cancelado';
   status_complement: string;
   is_exchange: boolean;
   order_date: string;

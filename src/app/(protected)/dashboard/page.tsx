@@ -42,8 +42,10 @@ const MONTH_NAMES = [
 
 const STATUS_STYLES: Record<Order['delivery_status'], { label: string; cls: string }> = {
   Confirmado: { label: 'Confirmado', cls: 'bg-blue-100 text-blue-700' },
-  Entregado:  { label: 'Entregado',  cls: 'bg-emerald-100 text-emerald-700' },
-  Devolucion: { label: 'Devolución', cls: 'bg-amber-100 text-amber-700' },
+  Enviado:    { label: 'Enviado',    cls: 'bg-purple-100 text-purple-700' },
+  Entregado:  { label: 'Entregado',  cls: 'bg-amber-100 text-amber-700' },
+  Pagado:     { label: 'Pagado',     cls: 'bg-emerald-100 text-emerald-700' },
+  Devolucion: { label: 'Devolución', cls: 'bg-orange-100 text-orange-700' },
   Cancelado:  { label: 'Cancelado',  cls: 'bg-red-100 text-red-700' },
 }
 
@@ -169,20 +171,27 @@ export default function DashboardPage() {
     else setMonth((m) => m + 1)
   }
 
-  // KPI calculations — include Confirmado + Entregado as "active" orders
-  const delivered = orders.filter((o) => o.delivery_status === 'Entregado')
+  // KPI calculations — pipeline: Confirmado → Enviado → Entregado → Pagado
   const confirmed = orders.filter((o) => o.delivery_status === 'Confirmado')
+  const sent      = orders.filter((o) => o.delivery_status === 'Enviado')
+  const delivered = orders.filter((o) => o.delivery_status === 'Entregado')
+  const paid      = orders.filter((o) => o.delivery_status === 'Pagado')
   const returns   = orders.filter((o) => o.delivery_status === 'Devolucion')
   const cancelled = orders.filter((o) => o.delivery_status === 'Cancelado')
-  const activeOrders = orders.filter((o) => o.delivery_status === 'Confirmado' || o.delivery_status === 'Entregado')
+  // Active = not cancelled/returned (count towards revenue)
+  const activeOrders = orders.filter((o) =>
+    ['Confirmado', 'Enviado', 'Entregado', 'Pagado'].includes(o.delivery_status)
+  )
+  // Bogo deuda = pedidos Entregados pero aún no Pagados
+  const bogoDebt = delivered.reduce((s, o) => s + o.value_to_collect, 0)
 
-  // Revenue: active orders (Confirmado + Entregado), NOT cancelled/returned
+  // Revenue: active orders, NOT cancelled/returned
   const revenueBogo     = activeOrders.reduce((s, o) => s + o.payment_cash_bogo, 0)
   const revenueCash     = activeOrders.reduce((s, o) => s + o.payment_cash, 0)
   const revenueTransfer = activeOrders.reduce((s, o) => s + o.payment_transfer, 0)
   const totalRevenue    = activeOrders.reduce((s, o) => s + o.value_to_collect, 0)
-  const confirmedRevenue = confirmed.reduce((s, o) => s + o.value_to_collect, 0)
-  const deliveredRevenue = delivered.reduce((s, o) => s + o.value_to_collect, 0)
+  const pendingRevenue  = [...confirmed, ...sent].reduce((s, o) => s + o.value_to_collect, 0)
+  const paidRevenue     = paid.reduce((s, o) => s + o.value_to_collect, 0)
 
   const totalCosts    = activeOrders.reduce((s, o) => s + o.product_cost, 0)
   const totalOpCosts  = activeOrders.reduce((s, o) => s + o.operating_cost, 0)
@@ -314,8 +323,9 @@ export default function DashboardPage() {
                 color="#0ea5e9"
                 sub={
                   <SubBreakdown items={[
-                    { label: 'Cobrado', value: formatCurrency(deliveredRevenue), color: '#10b981' },
-                    { label: 'Pendiente', value: formatCurrency(confirmedRevenue), color: '#3b82f6' },
+                    { label: 'Pagado', value: formatCurrency(paidRevenue), color: '#10b981' },
+                    { label: 'Bogo debe', value: formatCurrency(bogoDebt), color: '#f59e0b' },
+                    { label: 'En ruta', value: formatCurrency(pendingRevenue), color: '#3b82f6' },
                   ]} />
                 }
               />
@@ -338,6 +348,30 @@ export default function DashboardPage() {
                 color={profit >= 0 ? '#10b981' : '#ef4444'}
                 highlight
               />
+            </div>
+
+            {/* Pipeline + Bogo debt */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-2xl bg-blue-50 border border-blue-100 p-3">
+                <p className="text-[10px] font-semibold text-blue-500 uppercase">Confirmados</p>
+                <p className="text-xl font-bold text-blue-700 mt-0.5">{confirmed.length}</p>
+                <p className="text-[10px] text-blue-500 truncate">{formatCurrency(confirmed.reduce((s,o)=>s+o.value_to_collect,0))}</p>
+              </div>
+              <div className="rounded-2xl bg-purple-50 border border-purple-100 p-3">
+                <p className="text-[10px] font-semibold text-purple-500 uppercase">Enviados</p>
+                <p className="text-xl font-bold text-purple-700 mt-0.5">{sent.length}</p>
+                <p className="text-[10px] text-purple-500 truncate">{formatCurrency(sent.reduce((s,o)=>s+o.value_to_collect,0))}</p>
+              </div>
+              <div className="rounded-2xl bg-amber-50 border-2 border-amber-200 p-3">
+                <p className="text-[10px] font-semibold text-amber-600 uppercase">🚚 Bogo debe</p>
+                <p className="text-xl font-bold text-amber-700 mt-0.5">{formatCurrency(bogoDebt)}</p>
+                <p className="text-[10px] text-amber-600">{delivered.length} pedido(s) entregados</p>
+              </div>
+              <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-3">
+                <p className="text-[10px] font-semibold text-emerald-500 uppercase">✓ Pagados</p>
+                <p className="text-xl font-bold text-emerald-700 mt-0.5">{paid.length}</p>
+                <p className="text-[10px] text-emerald-500 truncate">{formatCurrency(paidRevenue)}</p>
+              </div>
             </div>
 
             {/* Extra KPI cards */}

@@ -25,7 +25,7 @@ import { useUser } from '@/lib/UserContext'
 import { isOwnerSupported } from '@/lib/db'
 import WhatsAppLink from '@/components/shared/WhatsAppLink'
 
-const DELIVERY_STATUS_OPTIONS = ['Confirmado', 'Entregado', 'Devolucion', 'Cancelado'] as const
+const DELIVERY_STATUS_OPTIONS = ['Confirmado', 'Enviado', 'Entregado', 'Pagado', 'Devolucion', 'Cancelado'] as const
 const DELIVERY_TYPE_OPTIONS = ['Bogo', 'Bodega', 'Otros', ''] as const
 const VENDOR_OPTIONS = ['Paola']
 
@@ -98,8 +98,10 @@ function computeKPIs(orders: Order[]): DailyKPIs {
 
 const STATUS_COLORS: Record<string, string> = {
   Confirmado: 'bg-blue-100 text-blue-700',
-  Entregado: 'bg-emerald-100 text-emerald-700',
-  Devolucion: 'bg-amber-100 text-amber-700',
+  Enviado: 'bg-purple-100 text-purple-700',
+  Entregado: 'bg-amber-100 text-amber-700',
+  Pagado: 'bg-emerald-100 text-emerald-700',
+  Devolucion: 'bg-orange-100 text-orange-700',
   Cancelado: 'bg-red-100 text-red-600',
 }
 

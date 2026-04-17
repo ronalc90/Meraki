@@ -155,11 +155,14 @@ export default function OrdersPage({
 
   // KPI summary
   const totalOrders = orders.length
-  const delivered = orders.filter((o) => o.delivery_status === 'Entregado').length
+  const delivered = orders.filter((o) => o.delivery_status === 'Entregado' || o.delivery_status === 'Pagado').length
   const returns = orders.filter((o) => o.delivery_status === 'Devolucion').length
   const cancelled = orders.filter((o) => o.delivery_status === 'Cancelado').length
-  const totalRevenue = orders
+  const bogoDebt = orders
     .filter((o) => o.delivery_status === 'Entregado')
+    .reduce((sum, o) => sum + (o.value_to_collect ?? 0), 0)
+  const totalRevenue = orders
+    .filter((o) => ['Entregado', 'Pagado'].includes(o.delivery_status))
     .reduce((sum, o) => sum + (o.value_to_collect ?? 0), 0)
   const totalCosts = orders.reduce((sum, o) => sum + (o.product_cost ?? 0), 0)
   const profit = totalRevenue - totalCosts
