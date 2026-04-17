@@ -4,14 +4,12 @@ import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Printer, X, Type } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import { getPrintFontSize, setPrintFontSize, PRINT_FONT_LABELS, type PrintFontSize } from '@/lib/preferences';
+import { useUser } from '@/lib/UserContext';
 
-type FontSize = 'small' | 'medium' | 'large';
+type FontSize = PrintFontSize;
 
-const FONT_LABELS: Record<FontSize, string> = {
-  small: 'Pequeño',
-  medium: 'Mediano',
-  large: 'Grande',
-};
+const FONT_LABELS = PRINT_FONT_LABELS;
 
 // Font size in pt for print (thermal 58mm paper)
 const FONT_SIZES: Record<FontSize, { body: number; bold: number; header: number; footer: number }> = {
@@ -59,8 +57,19 @@ function printGuide(rootId: string) {
 }
 
 export default function DispatchGuide({ order, onClose }: DispatchGuideProps) {
-  const [fontSize, setFontSize] = useState<FontSize>('medium');
+  const owner = useUser();
+  const [fontSize, setFontSizeState] = useState<FontSize>('medium');
   const rootId = `dispatch-guide-${order.order_code || 'x'}`;
+
+  // Load persisted preference on mount
+  useEffect(() => {
+    setFontSizeState(getPrintFontSize(owner));
+  }, [owner]);
+
+  function handleFontSizeChange(size: FontSize) {
+    setFontSizeState(size);
+    setPrintFontSize(owner, size);
+  }
 
   // Cleanup on unmount
   useEffect(() => {
@@ -87,7 +96,7 @@ export default function DispatchGuide({ order, onClose }: DispatchGuideProps) {
             {(Object.keys(FONT_LABELS) as FontSize[]).map((size) => (
               <button
                 key={size}
-                onClick={() => setFontSize(size)}
+                onClick={() => handleFontSizeChange(size)}
                 className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition-all ${
                   fontSize === size
                     ? 'bg-white text-purple-700 shadow-sm'
