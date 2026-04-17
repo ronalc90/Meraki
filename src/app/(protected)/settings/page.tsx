@@ -17,9 +17,21 @@ import {
   Eye,
   EyeOff,
   Zap,
+  Info,
+  Type,
+  MessageCircle,
+  Globe,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils'
+import { APP_VERSION } from '@/lib/version'
+import {
+  getPrintFontSize,
+  setPrintFontSize,
+  PRINT_FONT_LABELS,
+  type PrintFontSize,
+} from '@/lib/preferences'
+import { useUser } from '@/lib/UserContext'
 import ExcelImport from '@/components/shared/ExcelImport'
 
 interface SectionProps {
@@ -47,10 +59,22 @@ function Section({ icon, title, children }: SectionProps) {
 
 export default function SettingsPage() {
   const router = useRouter()
+  const owner = useUser()
   const [currentPwd, setCurrentPwd] = useState('')
   const [newPwd, setNewPwd] = useState('')
   const [confirmPwd, setConfirmPwd] = useState('')
   const [loggingOut, setLoggingOut] = useState(false)
+  const [printFontSize, setPrintFontSizeState] = useState<PrintFontSize>('medium')
+
+  useEffect(() => {
+    setPrintFontSizeState(getPrintFontSize(owner))
+  }, [owner])
+
+  function handlePrintFontSizeChange(size: PrintFontSize) {
+    setPrintFontSizeState(size)
+    setPrintFontSize(owner, size)
+    toast.success(`Tamaño de letra: ${PRINT_FONT_LABELS[size]}`)
+  }
 
   // OpenAI API Key state
   const [apiKeyInput, setApiKeyInput] = useState('')
@@ -363,6 +387,75 @@ export default function SettingsPage() {
           <p className="mt-3 text-xs text-gray-400">
             Para modificar datos del negocio, contacta al administrador.
           </p>
+        </Section>
+
+        {/* Preferencias de impresión */}
+        <Section icon={<Type className="h-4 w-4" />} title="Preferencias de impresión">
+          <div>
+            <p className="mb-2 text-xs text-gray-500">
+              Tamaño de letra en la guía de despacho (se guarda para tu cuenta y aplica cada vez que imprimas).
+            </p>
+            <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
+              {(Object.keys(PRINT_FONT_LABELS) as PrintFontSize[]).map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  onClick={() => handlePrintFontSizeChange(size)}
+                  className={cn(
+                    'flex-1 rounded-lg py-2 text-sm font-semibold transition-all',
+                    printFontSize === size
+                      ? 'bg-white text-purple-700 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700',
+                  )}
+                >
+                  {PRINT_FONT_LABELS[size]}
+                </button>
+              ))}
+            </div>
+          </div>
+        </Section>
+
+        {/* Acerca de */}
+        <Section icon={<Info className="h-4 w-4" />} title="Acerca de">
+          <dl className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <dt className="text-sm text-gray-500">Versión</dt>
+              <dd className="text-sm font-mono font-semibold text-gray-900">
+                {APP_VERSION}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <dt className="text-sm text-gray-500">Creada por</dt>
+              <dd className="text-sm font-semibold text-gray-900">Ronald · Koptup</dd>
+            </div>
+            <p className="pt-1 text-xs text-gray-400">
+              Cada nuevo cambio entregado sube la versión 0.001.
+            </p>
+          </dl>
+
+          <div className="mt-4 space-y-2 rounded-xl border border-purple-100 bg-purple-50/40 p-3">
+            <p className="text-xs font-semibold text-gray-700">¿Necesitas ayuda o tienes ideas?</p>
+            <a
+              href="https://wa.me/573024794842?text=Hola%20Ronald%2C%20te%20escribo%20por%20la%20app%20Meraki"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm text-gray-700 shadow-sm transition-colors hover:bg-emerald-50 hover:text-emerald-700"
+            >
+              <MessageCircle className="h-4 w-4 text-emerald-500" />
+              <span className="font-medium">+57 302 479 4842</span>
+              <span className="ml-auto text-xs text-gray-400">WhatsApp</span>
+            </a>
+            <a
+              href="https://koptup.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm text-gray-700 shadow-sm transition-colors hover:bg-purple-50 hover:text-purple-700"
+            >
+              <Globe className="h-4 w-4 text-purple-500" />
+              <span className="font-medium">koptup.com</span>
+              <span className="ml-auto text-xs text-gray-400">Sitio web</span>
+            </a>
+          </div>
         </Section>
 
         {/* Cerrar sesión */}

@@ -5,7 +5,7 @@ import { Plus, Search, Pencil, Trash2, X, Check, AlertTriangle, PackageSearch, D
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import type { Product } from '@/lib/types'
-import { cn, formatCurrency } from '@/lib/utils'
+import { cn, formatCurrency, parseCopAmount } from '@/lib/utils'
 import { downloadExcel } from '@/lib/export'
 import ProductPhotoAI from '@/components/products/ProductPhotoAI'
 import { useUser } from '@/lib/UserContext'
@@ -66,6 +66,35 @@ function Modal({ open, title, onClose, children }: ModalProps) {
       </div>
     </div>
   )
+}
+
+async function syncInventoryReference(
+  product: Product,
+  newCost: number,
+  hasOwner: boolean,
+  owner: string,
+): Promise<number> {
+  const nameToken = product.name.trim().toLowerCase().split(/\s+/)[0]
+  if (!nameToken && !product.code) return 0
+  let iq = supabase.from('inventory').select('id')
+  if (hasOwner) iq = iq.eq('owner', owner)
+  if (product.code) iq = iq.eq('product_id', product.code)
+  const { data: byCode } = await iq
+  let targets = byCode ?? []
+  if (targets.length === 0 && nameToken) {
+    let iq2 = supabase.from('inventory').select('id')
+    if (hasOwner) iq2 = iq2.eq('owner', owner)
+    iq2 = iq2.ilike('model', `%${nameToken}%`)
+    const { data: byModel } = await iq2
+    targets = byModel ?? []
+  }
+  if (targets.length === 0) return 0
+  const { error } = await supabase
+    .from('inventory')
+    .update({ reference: newCost })
+    .in('id', targets.map((t) => t.id))
+  if (error) return 0
+  return targets.length
 }
 
 function CategoryBadge({ category }: { category: string }) {
@@ -175,17 +204,13 @@ export default function ProductsPage({
       toast.error('El nombre del producto es requerido')
       return
     }
-    if (!form.cost) {
+    if (!form.cost || !String(form.cost).trim()) {
       toast.error('El costo del producto es requerido')
       return
     }
-    const cost = parseFloat(form.cost)
-    if (isNaN(cost)) {
-      toast.error('El costo debe ser un número válido')
-      return
-    }
-    if (cost < 0) {
-      toast.error('El costo no puede ser negativo')
+    const cost = parseCopAmount(form.cost)
+    if (cost === null) {
+      toast.error('El costo debe ser un número válido (ej: 45000 o $45.000)')
       return
     }
     // Check for duplicate code (only when creating, or when editing and code changed)
@@ -214,7 +239,12 @@ export default function ProductsPage({
           .update(payload)
           .eq('id', editingProduct.id)
         if (error) throw error
-        toast.success('Producto actualizado')
+        let msg = 'Producto actualizado'
+        if (editingProduct.cost !== cost) {
+          const synced = await syncInventoryReference(editingProduct, cost, hasOwner, owner)
+          if (synced > 0) msg = `Producto actualizado · ${synced} item(s) de inventario sincronizados`
+        }
+        toast.success(msg)
       } else {
         const { error } = await supabase.from('products').insert(payload)
         if (error) throw error
@@ -504,14 +534,18 @@ export default function ProductsPage({
               Costo (COP) <span className="text-red-400">*</span>
             </label>
             <input
-              type="number"
-              min="0"
-              step="100"
+              type="text"
+              inputMode="numeric"
               value={form.cost}
               onChange={(e) => setForm((f) => ({ ...f, cost: e.target.value }))}
-              placeholder="25000"
+              placeholder="45000  o  $45.000"
               className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
             />
+            {form.cost && parseCopAmount(form.cost) !== null && (
+              <p className="text-[11px] text-gray-500">
+                Se guardará como {formatCurrency(parseCopAmount(form.cost) ?? 0)}
+              </p>
+            )}
           </div>
 
           {/* Active toggle */}

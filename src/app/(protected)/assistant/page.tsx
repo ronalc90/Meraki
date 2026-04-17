@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/lib/UserContext';
 import { isOwnerSupported } from '@/lib/db';
-import { formatCurrency, generateOrderCode } from '@/lib/utils';
+import { formatCurrency, generateOrderCode, parseCopAmount } from '@/lib/utils';
 import DispatchGuide from '@/components/dispatch/DispatchGuide';
 import { downloadExcel } from '@/lib/export';
 
@@ -364,14 +364,7 @@ export default function AssistantPage() {
       const cd = data as Record<string, unknown>;
       const modelRaw = String(cd.model || '').trim();
       const model = modelRaw.toLowerCase();
-      const rawCost = cd.cost;
-      const cost = typeof rawCost === 'number'
-        ? (Number.isFinite(rawCost) && rawCost >= 0 ? Math.round(rawCost) : null)
-        : (() => {
-            const digits = String(rawCost ?? '').replace(/[^\d]/g, '');
-            const n = Number(digits);
-            return digits && Number.isFinite(n) && n >= 0 ? n : null;
-          })();
+      const cost = parseCopAmount(cd.cost as string | number);
       if (!modelRaw) {
         return 'No logré identificar el producto. ¿Cuál modelo querés actualizar?';
       }

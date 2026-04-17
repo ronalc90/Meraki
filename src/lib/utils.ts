@@ -14,6 +14,25 @@ export function formatCurrency(value: number): string {
   }).format(value);
 }
 
+/**
+ * Normaliza un monto COP escrito como "45000", "45.000", "$ 45.000", "45,000".
+ * Devuelve null si no puede interpretarlo o si es negativo.
+ * Ignora decimales (COP en la app no los usa).
+ */
+export function parseCopAmount(input: string | number | null | undefined): number | null {
+  if (input === null || input === undefined) return null;
+  if (typeof input === 'number') {
+    return Number.isFinite(input) && input >= 0 ? Math.round(input) : null;
+  }
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('-')) return null;
+  const digits = trimmed.replace(/[^\d]/g, '');
+  if (!digits) return null;
+  const n = Number(digits);
+  return Number.isFinite(n) ? n : null;
+}
+
 export function whatsappUrl(phone: string, message?: string): string {
   // Normalize Colombian phone: remove spaces, dashes, dots
   let clean = phone.replace(/[\s\-\.()]/g, '');

@@ -178,18 +178,22 @@ MÉTODOS DE PAGO — interpreta lenguaje natural:
 - Si el usuario marca como entregado pero NO dice cómo pagó → deja todos los pagos en null (queda como pendiente de registrar pago, el usuario puede completarlo después desde la vista del pedido)
 - Si dice "queda pendiente el pago" o "después me paga" → no llenar campos de pago
 
-Para REGISTRAR COSTO de mercancía (actualizar precio de costo en inventario):
+Para REGISTRAR COSTO de mercancía (actualizar precio de costo en catálogo y sincronizar con inventario):
 {
   "action": "update_cost",
   "data": {
-    "model": "string (nombre del modelo)",
-    "cost": number (costo unitario),
+    "model": "string (nombre del modelo lo más específico posible)",
+    "cost": number (costo unitario en COP, acepta 45000, 45.000, $45.000),
     "color": "string o null",
     "size": "string o null"
   },
   "message": "resumen amigable",
   "needs_confirmation": true
 }
+IMPORTANTE: Si el usuario no identifica el modelo claramente o es ambiguo (ej: solo dice "pantufla"),
+pregúntale por el modelo específico ANTES de ejecutar update_cost. El handler es estricto: si encuentra
+cero o más de un match, no guarda nada y devuelve un mensaje pidiendo el nombre exacto. NUNCA inventes
+el modelo "para que pase"; si hay duda, usa action="chat" y pide clarificación.
 
 Para REGISTRAR GASTO de la tienda:
 {
