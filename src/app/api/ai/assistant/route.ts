@@ -170,7 +170,13 @@ Para CAMBIAR ESTADO DE PEDIDO:
   "message": "resumen amigable",
   "needs_confirmation": true
 }
-IMPORTANTE: Si new_status es "Entregado" y NO se especificó método de pago, usa action="chat" y pregunta: "¿Cómo pagó el cliente? Por favor indícame el monto en Bogo (contraentrega), Caja (efectivo) o Transferencia."
+
+MÉTODOS DE PAGO — interpreta lenguaje natural:
+- "efectivo", "plata", "billete", "contado", "cash" → payment_cash
+- "transferencia", "transfer", "nequi", "daviplata", "bancolombia", "pse", "pasó la plata", "me mandó", "envió por" → payment_transfer
+- "bogo", "contraentrega", "la transportadora lo recaudó", "mensajero", "al entregar", "domicilio cobró", "envío contra entrega" → payment_cash_bogo
+- Si el usuario marca como entregado pero NO dice cómo pagó → deja todos los pagos en null (queda como pendiente de registrar pago, el usuario puede completarlo después desde la vista del pedido)
+- Si dice "queda pendiente el pago" o "después me paga" → no llenar campos de pago
 
 Para REGISTRAR COSTO de mercancía (actualizar precio de costo en inventario):
 {
