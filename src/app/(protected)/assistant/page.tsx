@@ -6,14 +6,9 @@ import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/lib/UserContext';
 import { isOwnerSupported } from '@/lib/db';
-import { formatCurrency, generateOrderCode, parseCopAmount } from '@/lib/utils';
+import { formatCurrency, generateOrderCode } from '@/lib/utils';
 import DispatchGuide from '@/components/dispatch/DispatchGuide';
 import { downloadExcel } from '@/lib/export';
-import {
-  applyOperatingCostToChanges,
-  buildInsertPayloadWithOperatingCost,
-} from '@/lib/operatingExpenses';
-import type { Order } from '@/lib/types';
 
 interface SubAction {
   action: string;
@@ -265,7 +260,7 @@ export default function AssistantPage() {
         status_complement: '',
       };
       if (hasOwner) basePayload.owner = owner;
-      const { payload } = buildInsertPayloadWithOperatingCost(basePayload);
+      const payload = basePayload;
       const { error } = await supabase.from('orders').insert(payload);
       if (error) throw error;
       const detail = String(orderData.detail || '').toLowerCase();
@@ -322,17 +317,15 @@ export default function AssistantPage() {
       else if (retData.client_name) oq = oq.ilike('client_name', `%${String(retData.client_name)}%`);
       const { data: found } = await oq.limit(1);
       if (found?.length) {
-        const order = found[0] as Order;
-        const changes: Partial<Order> = {
+        const order = found[0];
+        const mergedChanges: Record<string, unknown> = {
           delivery_status: 'Devolucion',
           comment: `${order.comment || ''} | Devolución: ${retData.reason || ''}`.trim(),
         };
-        const { mergedChanges, calc } = applyOperatingCostToChanges(order, changes);
         await supabase.from('orders').update(mergedChanges).eq('id', order.id);
         const detail = (order.detail || order.product_ref || '').toLowerCase();
         if (detail) { let iq = supabase.from('inventory').select('*').eq('status', 'Bueno'); if (hasOwner) iq = iq.eq('owner', owner); const { data: inv } = await iq; if (inv?.length) { const m = inv.find(i => detail.includes(i.model.toLowerCase()) || i.model.toLowerCase().includes(detail.split(' ')[0])); if (m) await supabase.from('inventory').update({ quantity: m.quantity + 1 }).eq('id', m.id); } }
-        const warning = calc.cityNotRecognized ? ` ⚠️ Ciudad sin tarifa, se usó Bogotá.` : '';
-        return `Pedido #${order.order_code} de ${order.client_name} → Devolución. Gasto op.: ${formatCurrency(calc.amount)}.${warning} Stock restaurado.`;
+        return `Pedido #${order.order_code} de ${order.client_name} → Devolución. Stock restaurado.`;
       }
       return 'No encontré ese pedido.';
     }
@@ -345,17 +338,16 @@ export default function AssistantPage() {
       oq = oq.order('created_at', { ascending: false });
       const { data: found } = await oq.limit(1);
       if (found?.length) {
-        const order = found[0] as Order;
-        const ns = String(sd.new_status || 'Entregado') as Order['delivery_status'];
-        const changes: Partial<Order> = { delivery_status: ns };
-        if (sd.payment_cash_bogo) changes.payment_cash_bogo = Number(sd.payment_cash_bogo);
-        if (sd.payment_cash) changes.payment_cash = Number(sd.payment_cash);
-        if (sd.payment_transfer) changes.payment_transfer = Number(sd.payment_transfer);
-        const { mergedChanges, calc } = applyOperatingCostToChanges(order, changes);
+        const order = found[0];
+        const ns = String(sd.new_status || 'Entregado');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mergedChanges: any = { delivery_status: ns };
+        if (sd.payment_cash_bogo) mergedChanges.payment_cash_bogo = Number(sd.payment_cash_bogo);
+        if (sd.payment_cash) mergedChanges.payment_cash = Number(sd.payment_cash);
+        if (sd.payment_transfer) mergedChanges.payment_transfer = Number(sd.payment_transfer);
         await supabase.from('orders').update(mergedChanges).eq('id', order.id);
         if (ns === 'Entregado' && order.delivery_status === 'Confirmado') { const d = (order.detail || order.product_ref || '').toLowerCase(); if (d) { let iq = supabase.from('inventory').select('*').eq('status', 'Bueno').gt('quantity', 0); if (hasOwner) iq = iq.eq('owner', owner); const { data: inv } = await iq; if (inv) { const m = inv.find(i => d.includes(i.model.toLowerCase()) || i.model.toLowerCase().includes(d.split(' ')[0])); if (m) await supabase.from('inventory').update({ quantity: Math.max(0, m.quantity - 1) }).eq('id', m.id); } } }
-        const warning = calc.cityNotRecognized ? ` ⚠️ Ciudad sin tarifa, se usó Bogotá.` : '';
-        return `Pedido #${order.order_code} de ${order.client_name} → "${ns}". Gasto op.: ${formatCurrency(calc.amount)}.${warning}`;
+        return `Pedido #${order.order_code} de ${order.client_name} → "${ns}".`;
       }
       return 'No encontré ese pedido.';
     }
@@ -372,7 +364,14 @@ export default function AssistantPage() {
       const cd = data as Record<string, unknown>;
       const modelRaw = String(cd.model || '').trim();
       const model = modelRaw.toLowerCase();
-      const cost = parseCopAmount(cd.cost as string | number);
+      const rawCost = cd.cost;
+      const cost = typeof rawCost === 'number'
+        ? (Number.isFinite(rawCost) && rawCost >= 0 ? Math.round(rawCost) : null)
+        : (() => {
+            const digits = String(rawCost ?? '').replace(/[^\d]/g, '');
+            const n = Number(digits);
+            return digits && Number.isFinite(n) && n >= 0 ? n : null;
+          })();
       if (!modelRaw) {
         return 'No logré identificar el producto. ¿Cuál modelo querés actualizar?';
       }
