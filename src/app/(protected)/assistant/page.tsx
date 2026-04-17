@@ -1,14 +1,19 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Mic, MicOff, Send, Sparkles, Check, X, Loader2, Package, ShoppingBag, Search, MapPin, Printer, Download, Trash2, ChevronRight } from 'lucide-react';
+import { Mic, MicOff, Send, Sparkles, Check, X, Loader2, Package, ShoppingBag, Search, MapPin, Download, Trash2, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/lib/UserContext';
 import { isOwnerSupported } from '@/lib/db';
-import { formatCurrency, generateOrderCode } from '@/lib/utils';
-import { GuideCard } from '@/components/dispatch/DispatchGuide';
+import { formatCurrency, generateOrderCode, parseCopAmount } from '@/lib/utils';
+import DispatchGuide from '@/components/dispatch/DispatchGuide';
 import { downloadExcel } from '@/lib/export';
+import {
+  applyOperatingCostToChanges,
+  buildInsertPayloadWithOperatingCost,
+} from '@/lib/operatingExpenses';
+import type { Order } from '@/lib/types';
 
 interface SubAction {
   action: string;
@@ -251,14 +256,16 @@ export default function AssistantPage() {
       const seq = (existing?.length || 0) + 1;
       const orderCode = generateOrderCode(today, seq);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const payload: any = {
+      const basePayload: any = {
         order_code: orderCode, client_name: orderData.client_name || '', phone: String(orderData.phone || ''),
         city: String(orderData.city || 'Bogotá'), address: String(orderData.address || ''), complement: String(orderData.complement || ''),
         product_ref: String(orderData.product_ref || ''), detail: String(orderData.detail || ''), comment: String(orderData.comment || ''),
         value_to_collect: Number(orderData.value_to_collect) || 0, delivery_status: 'Confirmado', vendor: owner, order_date: dateStr,
         payment_cash_bogo: 0, payment_cash: 0, payment_transfer: 0, product_cost: 0, operating_cost: 0, prepaid_amount: 0, is_exchange: false,
+        status_complement: '',
       };
-      if (hasOwner) payload.owner = owner;
+      if (hasOwner) basePayload.owner = owner;
+      const { payload } = buildInsertPayloadWithOperatingCost(basePayload);
       const { error } = await supabase.from('orders').insert(payload);
       if (error) throw error;
       const detail = String(orderData.detail || '').toLowerCase();
@@ -315,11 +322,17 @@ export default function AssistantPage() {
       else if (retData.client_name) oq = oq.ilike('client_name', `%${String(retData.client_name)}%`);
       const { data: found } = await oq.limit(1);
       if (found?.length) {
-        const order = found[0];
-        await supabase.from('orders').update({ delivery_status: 'Devolucion', comment: `${order.comment || ''} | Devolución: ${retData.reason || ''}`.trim() }).eq('id', order.id);
+        const order = found[0] as Order;
+        const changes: Partial<Order> = {
+          delivery_status: 'Devolucion',
+          comment: `${order.comment || ''} | Devolución: ${retData.reason || ''}`.trim(),
+        };
+        const { mergedChanges, calc } = applyOperatingCostToChanges(order, changes);
+        await supabase.from('orders').update(mergedChanges).eq('id', order.id);
         const detail = (order.detail || order.product_ref || '').toLowerCase();
         if (detail) { let iq = supabase.from('inventory').select('*').eq('status', 'Bueno'); if (hasOwner) iq = iq.eq('owner', owner); const { data: inv } = await iq; if (inv?.length) { const m = inv.find(i => detail.includes(i.model.toLowerCase()) || i.model.toLowerCase().includes(detail.split(' ')[0])); if (m) await supabase.from('inventory').update({ quantity: m.quantity + 1 }).eq('id', m.id); } }
-        return `Pedido #${order.order_code} de ${order.client_name} → Devolución. Stock restaurado.`;
+        const warning = calc.cityNotRecognized ? ` ⚠️ Ciudad sin tarifa, se usó Bogotá.` : '';
+        return `Pedido #${order.order_code} de ${order.client_name} → Devolución. Gasto op.: ${formatCurrency(calc.amount)}.${warning} Stock restaurado.`;
       }
       return 'No encontré ese pedido.';
     }
@@ -332,15 +345,17 @@ export default function AssistantPage() {
       oq = oq.order('created_at', { ascending: false });
       const { data: found } = await oq.limit(1);
       if (found?.length) {
-        const order = found[0]; const ns = String(sd.new_status || 'Entregado');
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const up: any = { delivery_status: ns };
-        if (sd.payment_cash_bogo) up.payment_cash_bogo = Number(sd.payment_cash_bogo);
-        if (sd.payment_cash) up.payment_cash = Number(sd.payment_cash);
-        if (sd.payment_transfer) up.payment_transfer = Number(sd.payment_transfer);
-        await supabase.from('orders').update(up).eq('id', order.id);
+        const order = found[0] as Order;
+        const ns = String(sd.new_status || 'Entregado') as Order['delivery_status'];
+        const changes: Partial<Order> = { delivery_status: ns };
+        if (sd.payment_cash_bogo) changes.payment_cash_bogo = Number(sd.payment_cash_bogo);
+        if (sd.payment_cash) changes.payment_cash = Number(sd.payment_cash);
+        if (sd.payment_transfer) changes.payment_transfer = Number(sd.payment_transfer);
+        const { mergedChanges, calc } = applyOperatingCostToChanges(order, changes);
+        await supabase.from('orders').update(mergedChanges).eq('id', order.id);
         if (ns === 'Entregado' && order.delivery_status === 'Confirmado') { const d = (order.detail || order.product_ref || '').toLowerCase(); if (d) { let iq = supabase.from('inventory').select('*').eq('status', 'Bueno').gt('quantity', 0); if (hasOwner) iq = iq.eq('owner', owner); const { data: inv } = await iq; if (inv) { const m = inv.find(i => d.includes(i.model.toLowerCase()) || i.model.toLowerCase().includes(d.split(' ')[0])); if (m) await supabase.from('inventory').update({ quantity: Math.max(0, m.quantity - 1) }).eq('id', m.id); } } }
-        return `Pedido #${order.order_code} de ${order.client_name} → "${ns}".`;
+        const warning = calc.cityNotRecognized ? ` ⚠️ Ciudad sin tarifa, se usó Bogotá.` : '';
+        return `Pedido #${order.order_code} de ${order.client_name} → "${ns}". Gasto op.: ${formatCurrency(calc.amount)}.${warning}`;
       }
       return 'No encontré ese pedido.';
     }
@@ -354,13 +369,60 @@ export default function AssistantPage() {
       return `Gasto de ${formatCurrency(Number(ed.amount))} registrado: "${ed.description}".`;
     }
     if (action === 'update_cost') {
-      const cd = data as Record<string, unknown>; const model = String(cd.model || '').toLowerCase(); const cost = Number(cd.cost) || 0;
-      let pq = supabase.from('products').select('*'); if (hasOwner) pq = pq.eq('owner', owner); if (model) pq = pq.ilike('name', `%${model}%`);
-      const { data: prods } = await pq.limit(5); let u = 0;
-      if (prods?.length) { for (const p of prods) { await supabase.from('products').update({ cost }).eq('id', p.id); u++; } }
-      let iq = supabase.from('inventory').select('id'); if (hasOwner) iq = iq.eq('owner', owner); if (model) iq = iq.ilike('model', `%${model}%`);
-      const { data: inv } = await iq; if (inv) { for (const i of inv) { await supabase.from('inventory').update({ reference: cost }).eq('id', i.id); } }
-      return `Costo de "${cd.model}" → ${formatCurrency(cost)}.${u > 0 ? ` ${u} producto(s) actualizados.` : ''}`;
+      const cd = data as Record<string, unknown>;
+      const modelRaw = String(cd.model || '').trim();
+      const model = modelRaw.toLowerCase();
+      const cost = parseCopAmount(cd.cost as string | number);
+      if (!modelRaw) {
+        return 'No logré identificar el producto. ¿Cuál modelo querés actualizar?';
+      }
+      if (cost === null) {
+        return `No pude interpretar el costo recibido ("${cd.cost}"). Dame un número válido en COP.`;
+      }
+      let pq = supabase.from('products').select('*');
+      if (hasOwner) pq = pq.eq('owner', owner);
+      pq = pq.ilike('name', `%${model}%`);
+      const { data: prods, error: prodErr } = await pq.limit(5);
+      if (prodErr) {
+        return `Error consultando productos: ${prodErr.message}`;
+      }
+      if (!prods || prods.length === 0) {
+        return `No encontré ningún producto que coincida con "${modelRaw}". No guardé nada. ¿Podés darme el nombre o código exacto?`;
+      }
+      if (prods.length > 1) {
+        const list = prods.map((p) => `• ${p.name} (${p.code}) — actual ${formatCurrency(p.cost ?? 0)}`).join('\n');
+        return `Encontré ${prods.length} productos que coinciden con "${modelRaw}", no guardé nada para evitar modificar el equivocado:\n${list}\n\nDame el nombre o código exacto.`;
+      }
+      const product = prods[0];
+      const { error: updErr } = await supabase.from('products').update({ cost }).eq('id', product.id);
+      if (updErr) {
+        return `No pude guardar el costo: ${updErr.message}`;
+      }
+      let invCount = 0;
+      let iq = supabase.from('inventory').select('id');
+      if (hasOwner) iq = iq.eq('owner', owner);
+      if (product.code) iq = iq.eq('product_id', product.code);
+      const { data: invByCode } = await iq;
+      let invTargets = invByCode ?? [];
+      if (invTargets.length === 0) {
+        const nameToken = product.name.trim().toLowerCase().split(/\s+/)[0];
+        if (nameToken) {
+          let iq2 = supabase.from('inventory').select('id');
+          if (hasOwner) iq2 = iq2.eq('owner', owner);
+          iq2 = iq2.ilike('model', `%${nameToken}%`);
+          const { data: invByModel } = await iq2;
+          invTargets = invByModel ?? [];
+        }
+      }
+      if (invTargets.length > 0) {
+        const { error: invErr } = await supabase
+          .from('inventory')
+          .update({ reference: cost })
+          .in('id', invTargets.map((i) => i.id));
+        if (!invErr) invCount = invTargets.length;
+      }
+      const tail = invCount > 0 ? ` (${invCount} item(s) de inventario sincronizados)` : '';
+      return `Registré el costo de "${product.name}" en ${formatCurrency(cost)}.${tail}`;
     }
     return 'Acción no reconocida.';
   };
@@ -700,35 +762,22 @@ export default function AssistantPage() {
     <>
       {chatUI}
 
-      {/* Dispatch Guide Modal — rendered outside the chat container so it covers everything */}
+      {/* Dispatch Guide Modal with font size selector + isolated print */}
       {showGuide && (
-        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl max-h-[85dvh] flex flex-col">
-            <div className="print-area p-3 overflow-y-auto flex-1 min-h-0">
-              <GuideCard
-                order={{
-                  order_code: String(showGuide.order_code ?? ''),
-                  client_name: String(showGuide.client_name ?? ''),
-                  phone: String(showGuide.phone ?? ''),
-                  address: String(showGuide.address ?? ''),
-                  complement: String(showGuide.complement ?? ''),
-                  product_ref: String(showGuide.product_ref ?? ''),
-                  detail: String(showGuide.detail ?? ''),
-                  value_to_collect: Number(showGuide.value_to_collect ?? 0),
-                  comment: String(showGuide.comment ?? ''),
-                }}
-              />
-            </div>
-            <div className="flex gap-2 p-3 md:p-4 print:hidden shrink-0" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
-              <button onClick={() => setShowGuide(null)} className="flex-1 bg-gray-100 text-gray-700 rounded-xl py-2.5 text-sm font-semibold hover:bg-gray-200 transition">
-                Cerrar
-              </button>
-              <button onClick={() => window.print()} className="flex-[2] flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold text-white shadow-md hover:-translate-y-0.5 transition-all" style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #9061f9 100%)' }}>
-                <Printer className="w-4 h-4" /> Imprimir
-              </button>
-            </div>
-          </div>
-        </div>
+        <DispatchGuide
+          order={{
+            order_code: String(showGuide.order_code ?? ''),
+            client_name: String(showGuide.client_name ?? ''),
+            phone: String(showGuide.phone ?? ''),
+            address: String(showGuide.address ?? ''),
+            complement: String(showGuide.complement ?? ''),
+            product_ref: String(showGuide.product_ref ?? ''),
+            detail: String(showGuide.detail ?? ''),
+            value_to_collect: Number(showGuide.value_to_collect ?? 0),
+            comment: String(showGuide.comment ?? ''),
+          }}
+          onClose={() => setShowGuide(null)}
+        />
       )}
       {/* Product/Item Detail Modal */}
       {selectedItem && (
