@@ -21,6 +21,7 @@ import { downloadExcel } from '@/lib/export'
 import { useUser } from '@/lib/UserContext'
 import { isOwnerSupported } from '@/lib/db'
 import PhotoCapture from '@/components/shared/PhotoCapture'
+import ImageLightbox from '@/components/shared/ImageLightbox'
 
 const CATEGORIES = ['Pantuflas', 'Maxisacos', 'Accesorios', 'Otro']
 const COLORS = ['Negro', 'Blanco', 'Gris', 'Beige', 'Rosado', 'Azul', 'Verde', 'Rojo', 'Morado', 'Multicolor']
@@ -271,6 +272,7 @@ export default function InventoryPage() {
   const [editItem, setEditItem] = useState<InventoryItem | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<InventoryItem | null>(null)
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
 
   const loadItems = useCallback(async () => {
     setLoading(true)
@@ -574,7 +576,19 @@ export default function InventoryPage() {
               {filtered.map((item) => (
                 <div key={item.id} className="rounded-2xl bg-white p-4 shadow-sm border border-gray-100">
                   {item.image_url && (
-                    <img src={item.image_url} alt={item.model} className="w-full h-32 object-cover rounded-xl mb-3" />
+                    <button
+                      type="button"
+                      onClick={() => setLightboxSrc(item.image_url!)}
+                      className="block w-full mb-3 group"
+                      aria-label="Ver foto ampliada"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={item.image_url}
+                        alt={item.model}
+                        className="w-full h-32 object-cover rounded-xl transition-transform group-hover:scale-[1.01] group-active:scale-95"
+                      />
+                    </button>
                   )}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
@@ -681,6 +695,10 @@ export default function InventoryPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {lightboxSrc && (
+        <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
       )}
     </div>
   )

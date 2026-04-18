@@ -66,6 +66,52 @@ function cleanString(val: unknown): string {
   return String(val).trim();
 }
 
+/**
+ * Parse an Excel date cell into "YYYY-MM-DD" using UTC getters to avoid
+ * timezone shifts. Excel stores dates as local-midnight Date objects;
+ * toISOString() on a server in a non-UTC TZ shifts them by the offset.
+ * Using getUTCFullYear/Month/Date keeps the calendar day stable.
+ */
+function parseExcelDate(val: unknown): string | null {
+  if (val === null || val === undefined || val === '') return null;
+
+  if (val instanceof Date) {
+    // Excel date-only cells in ExcelJS land as UTC-midnight Date objects.
+    // On servers whose TZ is west of UTC, converting back with local getters
+    // (or with toISOString on a shifted Date) rolls to the previous/next day.
+    // Using UTC getters keeps the calendar day stable across server TZs.
+    const y = val.getUTCFullYear();
+    const m = String(val.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(val.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  // Excel serial number (days since 1900-01-00)
+  if (typeof val === 'number' && Number.isFinite(val)) {
+    const base = Date.UTC(1899, 11, 30); // Excel epoch (accounts for 1900 leap bug)
+    const ms = base + Math.round(val * 86400000);
+    const d = new Date(ms);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  }
+
+  // String — accept YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY
+  const s = String(val).trim();
+  if (!s) return null;
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const dmy = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if (dmy) {
+    const [, d, m, y] = dmy;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  // Fallback: let Date parse it and use UTC components
+  const parsed = new Date(s);
+  if (!isNaN(parsed.getTime())) {
+    return `${parsed.getUTCFullYear()}-${String(parsed.getUTCMonth() + 1).padStart(2, '0')}-${String(parsed.getUTCDate()).padStart(2, '0')}`;
+  }
+  return null;
+}
+
 function detectType(headers: string[]): 'orders' | 'inventory' | 'products' | null {
   const upper = headers.map(h => h.toUpperCase().trim());
   if (upper.includes('CLIENTE') && (upper.includes('VALOR A COBRAR') || upper.includes('ESTADO'))) return 'orders';
@@ -140,11 +186,8 @@ export async function POST(request: NextRequest) {
             const s = cleanString(val).toLowerCase();
             record[dbField] = s !== 'inactivo' && s !== 'false' && s !== '0';
           } else if (dbField === 'order_date' || dbField === 'dispatch_date') {
-            if (val instanceof Date) {
-              record[dbField] = val.toISOString().slice(0, 10);
-            } else if (val) {
-              record[dbField] = cleanString(val);
-            }
+            const parsed = parseExcelDate(val);
+            if (parsed) record[dbField] = parsed;
           } else {
             record[dbField] = cleanString(val);
           }
