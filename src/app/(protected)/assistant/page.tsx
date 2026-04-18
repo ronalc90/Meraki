@@ -5,8 +5,10 @@ import { Mic, MicOff, Send, Sparkles, Check, X, Loader2, Package, ShoppingBag, S
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/lib/UserContext';
-import { isOwnerSupported } from '@/lib/db';
+import { isOwnerSupported, isPaymentTimingSupported } from '@/lib/db';
 import { formatCurrency, generateOrderCode, parseCopAmount, vendorDisplayName } from '@/lib/utils';
+import { syncInventoryOnOrderSave } from '@/lib/inventorySync';
+import type { PaymentTiming } from '@/lib/types';
 import DispatchGuide from '@/components/dispatch/DispatchGuide';
 import AssistantHelpModal from '@/components/assistant/AssistantHelpModal';
 import WorkdayArchiveModal from '@/components/assistant/WorkdayArchiveModal';
@@ -320,34 +322,78 @@ export default function AssistantPage() {
       const { data: existing } = await supabase.from('orders').select('id').gte('order_date', dateStr).lte('order_date', dateStr);
       const seq = (existing?.length || 0) + 1;
       const orderCode = generateOrderCode(today, seq);
+
+      const valueToCollect = Number(orderData.value_to_collect) || 0;
+      const rawTiming = String(orderData.payment_timing || 'ContraEntrega');
+      const paymentTiming: PaymentTiming = (['Anticipado', 'ContraEntrega', 'Mixto', 'Otro'].includes(rawTiming)
+        ? rawTiming
+        : 'ContraEntrega') as PaymentTiming;
+      // Anticipado implica que ya pagó todo; Mixto usa el monto que el asistente extrajo.
+      const prepaidHint = Number(orderData.prepaid_amount) || 0;
+      const prepaidAmount =
+        paymentTiming === 'Anticipado'
+          ? valueToCollect
+          : paymentTiming === 'Mixto'
+            ? Math.max(0, Math.min(prepaidHint, valueToCollect))
+            : 0;
+
+      // Canal del abono anticipado: si el AI lo dice, registramos el pago recibido.
+      const channel = String(orderData.payment_channel_prepaid || '').toLowerCase();
+      let payment_cash = 0, payment_transfer = 0, payment_cash_bogo = 0;
+      if (prepaidAmount > 0) {
+        if (channel === 'transfer' || channel === 'nequi' || channel === 'daviplata') payment_transfer = prepaidAmount;
+        else if (channel === 'cash') payment_cash = prepaidAmount;
+        else if (channel === 'bogo') payment_cash_bogo = prepaidAmount;
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const basePayload: any = {
         order_code: orderCode, client_name: orderData.client_name || '', phone: String(orderData.phone || ''),
         city: String(orderData.city || 'Bogotá'), address: String(orderData.address || ''), complement: String(orderData.complement || ''),
         product_ref: String(orderData.product_ref || ''), detail: String(orderData.detail || ''), comment: String(orderData.comment || ''),
-        value_to_collect: Number(orderData.value_to_collect) || 0, delivery_status: 'Confirmado', vendor: vendorDisplayName(owner), order_date: dateStr,
-        payment_cash_bogo: 0, payment_cash: 0, payment_transfer: 0, product_cost: 0, operating_cost: 0, prepaid_amount: 0, is_exchange: false,
+        value_to_collect: valueToCollect, delivery_status: 'Confirmado', vendor: vendorDisplayName(owner), order_date: dateStr,
+        payment_cash_bogo, payment_cash, payment_transfer, product_cost: 0, operating_cost: 0, prepaid_amount: prepaidAmount, is_exchange: false,
         status_complement: '',
       };
       if (hasOwner) basePayload.owner = owner;
-      const payload = basePayload;
-      const { error } = await supabase.from('orders').insert(payload);
+      const hasTiming = await isPaymentTimingSupported();
+      if (hasTiming) basePayload.payment_timing = paymentTiming;
+
+      const { error } = await supabase.from('orders').insert(basePayload);
       if (error) throw error;
-      const detail = String(orderData.detail || '').toLowerCase();
-      const productRef = String(orderData.product_ref || '').toLowerCase();
-      const orderQty = Number(orderData.quantity) || 1;
-      if (detail || productRef) {
-        const searchTerm = detail || productRef;
-        let invQuery = supabase.from('inventory').select('*').eq('status', 'Bueno').gt('quantity', 0);
-        if (hasOwner) invQuery = invQuery.eq('owner', owner);
-        const { data: invItems } = await invQuery;
-        if (invItems?.length) {
-          const match = invItems.find(i => searchTerm.includes(i.model.toLowerCase()) || i.model.toLowerCase().includes(searchTerm.split(' ')[0]));
-          if (match) await supabase.from('inventory').update({ quantity: Math.max(0, match.quantity - orderQty) }).eq('id', match.id);
-        }
+
+      // Sync inventario: descuenta (nunca negativo) o crea en cero con costo de referencia
+      const orderQty = Math.max(1, Number(orderData.quantity) || 1);
+      const detailStr = String(orderData.detail || '');
+      const productRef = String(orderData.product_ref || '');
+      let catalogProduct = null;
+      if (productRef) {
+        let pq = supabase.from('products').select('*').eq('code', productRef);
+        if (hasOwner) pq = pq.eq('owner', owner);
+        const { data: p } = await pq.limit(1);
+        if (p?.length) catalogProduct = p[0];
       }
-      setShowGuide(payload);
-      return `Pedido #${orderCode} guardado para ${orderData.client_name}. Stock actualizado.`;
+      const invResult = await syncInventoryOnOrderSave({
+        owner, hasOwner,
+        productRef,
+        detail: detailStr,
+        searchTerm: detailStr || productRef,
+        quantity: orderQty,
+        product: catalogProduct,
+      });
+
+      setShowGuide(basePayload);
+      const tail = invResult.createdZeroStock
+        ? ' Producto sin stock previo: creé un registro en inventario en 0 con el costo de referencia para contabilidad.'
+        : invResult.decremented
+          ? ' Stock actualizado.'
+          : '';
+      const timingMsg = paymentTiming === 'Anticipado'
+        ? ' Marcado como YA PAGADO en la guía.'
+        : paymentTiming === 'Mixto'
+          ? ` Abono registrado: ${prepaidAmount}. Saldo contra entrega.`
+          : '';
+      return `Pedido #${orderCode} guardado para ${orderData.client_name}.${timingMsg}${tail}`;
     }
     if (action === 'add_inventory') {
       const items = (Array.isArray(data) ? data : [data]) as Array<Record<string, unknown>>;
@@ -904,6 +950,8 @@ export default function AssistantPage() {
             detail: String(showGuide.detail ?? ''),
             value_to_collect: Number(showGuide.value_to_collect ?? 0),
             comment: String(showGuide.comment ?? ''),
+            payment_timing: (showGuide.payment_timing as 'Anticipado' | 'ContraEntrega' | 'Mixto' | 'Otro' | '' | undefined) ?? '',
+            prepaid_amount: Number(showGuide.prepaid_amount ?? 0),
           }}
           onClose={() => setShowGuide(null)}
         />

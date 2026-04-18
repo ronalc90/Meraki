@@ -33,6 +33,10 @@ CREATE INDEX IF NOT EXISTS idx_inventory_owner ON inventory(owner);
 UPDATE products SET owner = 'Paola' WHERE owner IS NULL;
 UPDATE orders SET owner = 'Paola' WHERE owner IS NULL;
 UPDATE inventory SET owner = 'Paola' WHERE owner IS NULL;
+
+-- v1.010: tipo de pago (anticipado / contra entrega / mixto / otro)
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_timing VARCHAR(20) DEFAULT 'ContraEntrega';
+UPDATE orders SET payment_timing = 'ContraEntrega' WHERE payment_timing IS NULL;
         `.trim(),
         status: 'needs_manual_migration',
       }, { status: 400 });

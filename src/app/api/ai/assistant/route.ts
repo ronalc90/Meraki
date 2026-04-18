@@ -51,9 +51,11 @@ Ejemplos de cuándo usar multi_action:
 EJEMPLOS REALES EN LENGUAJE NATURAL (lo que Paola realmente dice por voz o texto):
 
 CREAR PEDIDO:
-- "Carlos, 3113339988, Carrera 15 #80-25 apto 302, vaquita blanca talla 38, $85.000, paga contraentrega"
-- "Pedido para María del Rosario, Cll 72 #14-33, pantufla clásica negra, 1 unidad, 90 mil"
-- "Nuevo pedido: Juan Pérez 3201234567, Chía barrio Los Nogales casa 12, maxisaco cool gris, $110.000, ya pagó por Nequi"
+- "Carlos, 3113339988, Carrera 15 #80-25 apto 302, vaquita blanca talla 38, $85.000, paga contraentrega" → payment_timing=ContraEntrega, prepaid_amount=0
+- "Pedido para María del Rosario, Cll 72 #14-33, pantufla clásica negra, 1 unidad, 90 mil" → payment_timing=ContraEntrega (default)
+- "Nuevo pedido: Juan Pérez 3201234567, Chía barrio Los Nogales casa 12, maxisaco cool gris, $110.000, ya pagó por Nequi" → payment_timing=Anticipado, prepaid_amount=110000, payment_channel_prepaid=transfer
+- "Pedido para Ana 3001112233 Cr 7 #45-12 vaquita rosa T.37 $85.000, abonó 30 mil por Nequi y el resto al entregar" → payment_timing=Mixto, prepaid_amount=30000, payment_channel_prepaid=transfer
+- "Carlos maxisaco gris $110.000 se lo fio, me paga el lunes" → payment_timing=Otro, prepaid_amount=0, comment describe el crédito
 
 AGREGAR INVENTARIO:
 - "Llegaron 5 vaquitas blancas talla 38 en la canasta C03, me costaron 15000 cada una"
@@ -137,11 +139,24 @@ Para CREAR PEDIDO:
     "value_to_collect": number,
     "city": "string (default Bogotá)",
     "product_ref": "PANT|MAX|POC|BOL o vacío",
-    "comment": "string"
+    "comment": "string",
+    "payment_timing": "ContraEntrega | Anticipado | Mixto | Otro (default ContraEntrega)",
+    "prepaid_amount": number (sólo si Anticipado o Mixto; 0 si no aplica),
+    "payment_channel_prepaid": "cash|transfer|bogo|null (canal del abono anticipado, para registrarlo)"
   },
   "message": "resumen amigable",
   "needs_confirmation": true
 }
+
+REGLAS DE TIPO DE PAGO (payment_timing):
+- "paga contraentrega", "al entregar", "contra entrega", "cobra al domicilio", SIN indicio de abono → ContraEntrega (default), prepaid_amount=0.
+- "ya pagó", "ya consignó", "ya transfirió", "pasó la plata por Nequi", "pago anticipado", "pagó por adelantado" con monto igual al total → Anticipado, prepaid_amount = value_to_collect.
+- "abonó X", "pagó X y el resto al entregar", "consignó 30 mil y el resto contra entrega" → Mixto, prepaid_amount = monto abonado (no el total).
+- "me lo paga en especie", "es un canje", "fiado", "a crédito", "cuando pueda" → Otro, prepaid_amount=0.
+- Si el usuario dice CÓMO pagó el anticipado (Nequi, transferencia, efectivo), además incluí payment_channel_prepaid:
+    "nequi"/"daviplata"/"transferencia"/"bancolombia" → "transfer"
+    "efectivo"/"caja" → "cash"
+    "bogo"/"mensajero" → "bogo"
 
 Para AGREGAR INVENTARIO:
 {

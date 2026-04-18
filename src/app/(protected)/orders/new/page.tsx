@@ -5,13 +5,15 @@ import { useRouter } from 'next/navigation'
 import { Bot, ClipboardList, AlertTriangle, Package } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
-import type { Product, ParsedOrder } from '@/lib/types'
+import type { Product, ParsedOrder, PaymentTiming } from '@/lib/types'
+import { PAYMENT_TIMING_OPTIONS } from '@/lib/types'
 import { generateOrderCode, vendorDisplayName } from '@/lib/utils'
 import AIOrderInput from '@/components/orders/AIOrderInput'
 import AIInventoryInput from '@/components/inventory/AIInventoryInput'
 import DispatchGuide from '@/components/dispatch/DispatchGuide'
 import { useUser } from '@/lib/UserContext'
-import { isOwnerSupported } from '@/lib/db'
+import { isOwnerSupported, isPaymentTimingSupported } from '@/lib/db'
+import { syncInventoryOnOrderSave } from '@/lib/inventorySync'
 
 type DeliveryType = 'Bogo' | 'Bodega' | 'Otros' | ''
 type DeliveryStatus = 'Confirmado' | 'Entregado' | 'Devolucion' | 'Cancelado'
@@ -34,6 +36,8 @@ interface OrderForm {
   detail: string
   comment: string
   value_to_collect: string
+  payment_timing: PaymentTiming
+  prepaid_amount: string
   payment_cash_bogo: string
   payment_cash: string
   payment_transfer: string
@@ -61,6 +65,8 @@ const EMPTY_FORM: OrderForm = {
   detail: '',
   comment: '',
   value_to_collect: '',
+  payment_timing: 'ContraEntrega',
+  prepaid_amount: '',
   payment_cash_bogo: '',
   payment_cash: '',
   payment_transfer: '',
@@ -72,6 +78,21 @@ const EMPTY_FORM: OrderForm = {
 }
 
 const DEFAULT_CITY = 'Bogotá'
+
+/**
+ * Resuelve cuánto se pagó por anticipado según el tipo de pago elegido:
+ * - Anticipado → todo el valor (ignora lo que el usuario tecleó: ya pagó todo).
+ * - Mixto → el monto abonado en el campo "Abono anticipado".
+ * - Contra entrega / Otro → 0 (se recauda al entregar o se paga diferente).
+ */
+function normalizePrepaidAmount(form: OrderForm, totalValue: number): number {
+  if (form.payment_timing === 'Anticipado') return totalValue
+  if (form.payment_timing === 'Mixto') {
+    const abono = parseFloat(form.prepaid_amount) || 0
+    return Math.max(0, Math.min(abono, totalValue))
+  }
+  return 0
+}
 
 /**
  * Compone las piezas opcionales de ubicación (barrio/localidad/sector)
@@ -173,6 +194,7 @@ export default function NewOrderPage({
     order_code: string; client_name: string; phone: string;
     address: string; complement: string; product_ref: string;
     detail: string; value_to_collect: number; comment: string;
+    payment_timing?: PaymentTiming; prepaid_amount?: number;
   } | null>(null)
 
   const prefillDate = typeof sp.date === 'string' ? sp.date : todayString()
@@ -241,6 +263,11 @@ export default function NewOrderPage({
       const order_code = generateOrderCode(orderDate, sequence)
 
       const hasOwner = await isOwnerSupported()
+      const hasPaymentTiming = await isPaymentTimingSupported()
+
+      const valueToCollect = parseFloat(form.value_to_collect) || 0
+      const prepaidAmount = normalizePrepaidAmount(form, valueToCollect)
+
       const payload: Record<string, unknown> = {
         order_code,
         client_name: form.client_name.trim(),
@@ -251,7 +278,7 @@ export default function NewOrderPage({
         product_ref: form.product_ref.trim(),
         detail: composeDetail(form),
         comment: form.comment.trim(),
-        value_to_collect: parseFloat(form.value_to_collect) || 0,
+        value_to_collect: valueToCollect,
         payment_cash_bogo: parseFloat(form.payment_cash_bogo) || 0,
         payment_cash: parseFloat(form.payment_cash) || 0,
         payment_transfer: parseFloat(form.payment_transfer) || 0,
@@ -265,12 +292,29 @@ export default function NewOrderPage({
         status_complement: '',
         dispatch_date: null,
         guide_number: '',
-        prepaid_amount: 0,
+        prepaid_amount: prepaidAmount,
       }
       if (hasOwner) payload.owner = owner
+      if (hasPaymentTiming) payload.payment_timing = form.payment_timing || 'ContraEntrega'
 
       const { error } = await supabase.from('orders').insert(payload)
       if (error) throw error
+
+      // Sincronización con inventario: descuenta si existe (nunca negativo)
+      // o crea un registro en cero con el costo de referencia para contabilidad.
+      const inventoryResult = await syncInventoryOnOrderSave({
+        owner,
+        hasOwner,
+        productRef: form.product_ref.trim(),
+        detail: composeDetail(form),
+        searchTerm: `${form.detail_model} ${form.detail_color} ${form.detail_size}`.trim(),
+        quantity: Math.max(1, parseInt(form.detail_quantity, 10) || 1),
+        product: selectedProduct ?? null,
+      })
+
+      if (inventoryResult.createdZeroStock) {
+        toast('Producto nuevo: creé un registro en inventario con stock 0 y costo de referencia', { icon: '📦', duration: 4000 })
+      }
 
       toast.success(`Pedido ${order_code} creado exitosamente`)
       router.push(`/orders/daily/${form.order_date}`)
@@ -679,43 +723,89 @@ export default function NewOrderPage({
                   disabled={saving}
                 />
               </Field>
-              <Field label="Recaudo Bogo (COP)">
-                <input
-                  type="number"
-                  min="0"
-                  step="100"
-                  className={inputCls}
-                  placeholder="0"
-                  value={form.payment_cash_bogo}
-                  onChange={(e) => setField('payment_cash_bogo', e.target.value)}
+              <Field label="Tipo de pago">
+                <select
+                  className={selectCls}
+                  value={form.payment_timing}
+                  onChange={(e) => setField('payment_timing', e.target.value as PaymentTiming)}
                   disabled={saving}
-                />
-              </Field>
-              <Field label="Recaudo Caja (COP)">
-                <input
-                  type="number"
-                  min="0"
-                  step="100"
-                  className={inputCls}
-                  placeholder="0"
-                  value={form.payment_cash}
-                  onChange={(e) => setField('payment_cash', e.target.value)}
-                  disabled={saving}
-                />
-              </Field>
-              <Field label="Recaudo Transferencia (COP)">
-                <input
-                  type="number"
-                  min="0"
-                  step="100"
-                  className={inputCls}
-                  placeholder="0"
-                  value={form.payment_transfer}
-                  onChange={(e) => setField('payment_transfer', e.target.value)}
-                  disabled={saving}
-                />
+                >
+                  {PAYMENT_TIMING_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
               </Field>
             </div>
+
+            {form.payment_timing === 'Anticipado' && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+                <b>Pago anticipado:</b> el cliente ya pagó el total. En la guía aparecerá
+                <b> &ldquo;YA PAGADO&rdquo;</b> para que el despachador no recaude nada.
+              </div>
+            )}
+
+            {form.payment_timing === 'Mixto' && (
+              <Field label="Abono anticipado (COP)">
+                <input
+                  type="number"
+                  min="0"
+                  step="100"
+                  className={inputCls}
+                  placeholder="30000"
+                  value={form.prepaid_amount}
+                  onChange={(e) => setField('prepaid_amount', e.target.value)}
+                  disabled={saving}
+                />
+              </Field>
+            )}
+
+            {form.payment_timing === 'Otro' && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                <b>Otro tipo de pago</b> (crédito, especie, canje…). Usa el campo &ldquo;Comentario&rdquo;
+                arriba para describir cómo se pagó.
+              </div>
+            )}
+
+            {(form.payment_timing === 'ContraEntrega' || form.payment_timing === 'Mixto') && (
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Field label="Recaudo Bogo (COP)">
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    className={inputCls}
+                    placeholder="0"
+                    value={form.payment_cash_bogo}
+                    onChange={(e) => setField('payment_cash_bogo', e.target.value)}
+                    disabled={saving}
+                  />
+                </Field>
+                <Field label="Recaudo Caja (COP)">
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    className={inputCls}
+                    placeholder="0"
+                    value={form.payment_cash}
+                    onChange={(e) => setField('payment_cash', e.target.value)}
+                    disabled={saving}
+                  />
+                </Field>
+                <Field label="Recaudo Transferencia (COP)">
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    className={inputCls}
+                    placeholder="0"
+                    value={form.payment_transfer}
+                    onChange={(e) => setField('payment_transfer', e.target.value)}
+                    disabled={saving}
+                  />
+                </Field>
+              </div>
+            )}
           </div>
 
           {/* Section: Logística */}

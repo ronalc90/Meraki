@@ -9,6 +9,15 @@ export interface Product {
   created_at: string;
 }
 
+export type PaymentTiming = 'Anticipado' | 'ContraEntrega' | 'Mixto' | 'Otro' | '';
+
+export const PAYMENT_TIMING_OPTIONS: Array<{ value: Exclude<PaymentTiming, ''>; label: string; short: string }> = [
+  { value: 'ContraEntrega', label: 'Contra entrega', short: 'Contra entrega' },
+  { value: 'Anticipado', label: 'Pago anticipado (ya pagó)', short: 'Anticipado' },
+  { value: 'Mixto', label: 'Mixto (abono + saldo contra entrega)', short: 'Mixto' },
+  { value: 'Otro', label: 'Otro (crédito, especie, canje…)', short: 'Otro' },
+];
+
 export interface Order {
   id: number;
   order_code: string;
@@ -35,6 +44,8 @@ export interface Order {
   guide_number: string;
   prepaid_amount: number;
   operating_cost: number;
+  /** Momento del pago (v1.010). Columna opcional en DB: puede ser undefined si la migración no está aplicada. */
+  payment_timing?: PaymentTiming;
   created_at: string;
 }
 

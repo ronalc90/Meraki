@@ -1,6 +1,7 @@
 import { supabase, supabaseConfigured } from './supabase';
 
 let _ownerSupported: boolean | null = null;
+let _paymentTimingSupported: boolean | null = null;
 
 export async function isOwnerSupported(): Promise<boolean> {
   if (!supabaseConfigured) return false;
@@ -14,6 +15,22 @@ export async function isOwnerSupported(): Promise<boolean> {
   return _ownerSupported;
 }
 
+export async function isPaymentTimingSupported(): Promise<boolean> {
+  if (!supabaseConfigured) return false;
+  if (_paymentTimingSupported !== null) return _paymentTimingSupported;
+  try {
+    const { error } = await supabase.from('orders').select('payment_timing').limit(1);
+    _paymentTimingSupported = !error;
+  } catch {
+    _paymentTimingSupported = false;
+  }
+  return _paymentTimingSupported;
+}
+
 export function resetOwnerCache() {
   _ownerSupported = null;
+}
+
+export function resetPaymentTimingCache() {
+  _paymentTimingSupported = null;
 }

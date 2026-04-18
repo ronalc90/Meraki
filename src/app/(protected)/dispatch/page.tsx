@@ -91,6 +91,8 @@ function PrintView({ orders, onClose, sizes }: { orders: Order[]; onClose: () =>
                     detail: order.detail || '',
                     value_to_collect: order.value_to_collect,
                     comment: order.comment || '',
+                    payment_timing: order.payment_timing ?? '',
+                    prepaid_amount: order.prepaid_amount ?? 0,
                   }}
                 />
               </div>
