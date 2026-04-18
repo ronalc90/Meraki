@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Mic, MicOff, Send, Sparkles, Check, X, Loader2, Package, ShoppingBag, Search, MapPin, Download, Trash2, ChevronRight, HelpCircle } from 'lucide-react';
+import { Mic, MicOff, Send, Sparkles, Check, X, Loader2, Package, ShoppingBag, Search, MapPin, Download, Trash2, ChevronRight, HelpCircle, CheckCircle, RotateCcw, AlertTriangle, DollarSign, Receipt, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/lib/UserContext';
@@ -577,20 +577,53 @@ export default function AssistantPage() {
       {/* Chat area */}
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3 min-h-0">
         {messages.length === 0 && (
-          <div className="text-center py-6 md:py-12 text-gray-400">
-            <Sparkles className="w-10 h-10 md:w-16 md:h-16 mx-auto mb-3 text-purple-200" />
-            <p className="text-base md:text-lg font-semibold text-gray-500 mb-1">Hola! Soy tu asistente</p>
-            <p className="text-xs md:text-sm mb-4">Habla o escribe:</p>
-            <div className="grid grid-cols-1 gap-1.5 max-w-xs mx-auto text-left">
+          <div className="py-4 md:py-8 text-gray-400">
+            <div className="text-center mb-4">
+              <Sparkles className="w-10 h-10 md:w-14 md:h-14 mx-auto mb-2 text-purple-200" />
+              <p className="text-base md:text-lg font-semibold text-gray-600 mb-0.5">Hola, soy tu asistente</p>
+              <p className="text-xs md:text-sm text-gray-500 mb-1">Habla o escribe en tus palabras — toca un ejemplo para empezar:</p>
+              <button
+                type="button"
+                onClick={() => setHelpOpen(true)}
+                className="inline-flex items-center gap-1 text-[11px] md:text-xs text-purple-600 hover:text-purple-700 font-medium"
+              >
+                <HelpCircle className="w-3 h-3" />
+                Ver todo lo que puedo hacer
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-1.5 max-w-md mx-auto text-left">
               {[
-                { icon: <ShoppingBag className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />, text: '"Carlos 3203436512 Calle 80A clásica miel $60.000"' },
-                { icon: <Package className="w-3.5 h-3.5 text-green-500 shrink-0 mt-0.5" />, text: '"Tengo 10 vaquitas talla 38 en C015"' },
-                { icon: <Search className="w-3.5 h-3.5 text-purple-500 shrink-0 mt-0.5" />, text: '"¿Dónde están las de Stitch?"' },
-                { icon: <MapPin className="w-3.5 h-3.5 text-orange-500 shrink-0 mt-0.5" />, text: '"¿Cuántos pedidos hay hoy?"' },
+                { group: 'Crear pedido', icon: <ShoppingBag className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />, text: '"Carlos 3203436512 Cr 15 #80-25 clásica miel talla 38 $60.000"' },
+                { group: 'Crear pedido', icon: <ShoppingBag className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />, text: '"Pedido para María, Cll 72 #14-33, vaquita blanca, $85.000"' },
+                { group: 'Crear pedido', icon: <ShoppingBag className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />, text: '"Juan 3201234567 Chía, maxisaco cool gris, 110 mil, ya pagó por Nequi"' },
+                { group: 'Agregar inventario', icon: <Package className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />, text: '"Tengo 10 vaquitas talla 38 en C015 a $15.000 cada una"' },
+                { group: 'Agregar inventario', icon: <Package className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />, text: '"Puse 3 maxisacos gris cool en C08 a 45 mil"' },
+                { group: 'Buscar', icon: <Search className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />, text: '"¿Dónde están las pantuflas stitch azules?"' },
+                { group: 'Buscar', icon: <Search className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />, text: '"¿Cuántas vaquitas talla 38 me quedan?"' },
+                { group: 'Pedidos', icon: <MapPin className="w-3.5 h-3.5 text-orange-500 shrink-0 mt-0.5" />, text: '"¿Cuántos pedidos hay hoy?"' },
+                { group: 'Pedidos', icon: <MapPin className="w-3.5 h-3.5 text-orange-500 shrink-0 mt-0.5" />, text: '"Pedidos pendientes de entrega"' },
+                { group: 'Cambiar estado', icon: <CheckCircle className="w-3.5 h-3.5 text-purple-500 shrink-0 mt-0.5" />, text: '"El pedido de Carlos ya lo entregaron"' },
+                { group: 'Cambiar estado', icon: <CheckCircle className="w-3.5 h-3.5 text-purple-500 shrink-0 mt-0.5" />, text: '"Bogo me pagó el de María, 85 mil"' },
+                { group: 'Cambiar estado', icon: <CheckCircle className="w-3.5 h-3.5 text-purple-500 shrink-0 mt-0.5" />, text: '"Cancela el pedido #4041302"' },
+                { group: 'Costo producto', icon: <DollarSign className="w-3.5 h-3.5 text-cyan-500 shrink-0 mt-0.5" />, text: '"Las pantuflas vaquita me costaron $15.000 cada una"' },
+                { group: 'Costo producto', icon: <DollarSign className="w-3.5 h-3.5 text-cyan-500 shrink-0 mt-0.5" />, text: '"Sube el costo de la maxisaco ovejero a 45.000"' },
+                { group: 'Gasto general', icon: <Receipt className="w-3.5 h-3.5 text-pink-500 shrink-0 mt-0.5" />, text: '"Pagué 800 mil de arriendo"' },
+                { group: 'Gasto general', icon: <Receipt className="w-3.5 h-3.5 text-pink-500 shrink-0 mt-0.5" />, text: '"Gasté 25.000 en bolsas de empaque"' },
+                { group: 'Devolución', icon: <RotateCcw className="w-3.5 h-3.5 text-orange-500 shrink-0 mt-0.5" />, text: '"Me devolvieron el pedido de Carlos, le quedó grande"' },
+                { group: 'Defectuoso', icon: <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />, text: '"Esta pantufla vaquita azul está rota"' },
+                { group: 'Reporte', icon: <FileText className="w-3.5 h-3.5 text-indigo-500 shrink-0 mt-0.5" />, text: '"Dame el reporte de hoy"' },
+                { group: 'Reporte', icon: <FileText className="w-3.5 h-3.5 text-indigo-500 shrink-0 mt-0.5" />, text: '"¿Cuánto he vendido este mes?"' },
               ].map((ex, i) => (
-                <button key={i} onClick={() => setInput(ex.text.replace(/"/g, ''))} className="flex items-start gap-2 p-1.5 rounded-lg hover:bg-gray-50 text-xs text-gray-600 text-left transition">
+                <button
+                  key={i}
+                  onClick={() => setInput(ex.text.replace(/"/g, ''))}
+                  className="flex items-start gap-2 px-2 py-1.5 rounded-lg hover:bg-purple-50 border border-transparent hover:border-purple-100 text-xs text-gray-700 text-left transition"
+                >
                   {ex.icon}
-                  <span className="leading-snug">{ex.text}</span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide leading-tight">{ex.group}</span>
+                    <span className="block leading-snug">{ex.text}</span>
+                  </span>
                 </button>
               ))}
             </div>
