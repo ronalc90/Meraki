@@ -18,9 +18,21 @@ import {
   EyeOff,
   Zap,
   Info,
-  Type,
   MessageCircle,
   Globe,
+  Palette,
+  Sun,
+  Moon,
+  Monitor,
+  Sparkles,
+  LayoutGrid,
+  DollarSign,
+  ShieldAlert,
+  Printer,
+  Image as ImageIcon,
+  Trash2,
+  AlertTriangle,
+  HelpCircle,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils'
@@ -29,24 +41,55 @@ import {
   getPrintFontSize,
   setPrintFontSize,
   PRINT_FONT_LABELS,
+  getUiFontSize,
+  setUiFontSize,
+  UI_FONT_LABELS,
+  getThemeMode,
+  setThemeMode,
+  THEME_LABELS,
+  getUiDensity,
+  setUiDensity,
+  getCurrencyFormat,
+  setCurrencyFormat,
+  CURRENCY_LABELS,
+  getReduceMotion,
+  setReduceMotion,
+  getSoundsEnabled,
+  setSoundsEnabled,
+  getConfirmDestructive,
+  setConfirmDestructive,
+  getAutoOpenPrintDialog,
+  setAutoOpenPrintDialog,
+  getShowPrintLogo,
+  setShowPrintLogo,
+  clearAllPreferences,
   type PrintFontSize,
+  type UiFontSize,
+  type ThemeMode,
+  type UiDensity,
+  type CurrencyFormat,
 } from '@/lib/preferences'
 import { useUser } from '@/lib/UserContext'
 import ExcelImport from '@/components/shared/ExcelImport'
+import PageHelpModal from '@/components/shared/PageHelpModal'
+import { SETTINGS_HELP } from '@/lib/pageHelp'
 
 interface SectionProps {
   icon: React.ReactNode
   title: string
+  tone?: 'purple' | 'red' | 'amber'
   children: React.ReactNode
 }
 
-function Section({ icon, title, children }: SectionProps) {
+function Section({ icon, title, tone = 'purple', children }: SectionProps) {
+  const toneBg =
+    tone === 'red' ? '#ef4444' : tone === 'amber' ? '#f59e0b' : '#7c3aed'
   return (
     <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
       <div className="flex items-center gap-3 border-b border-gray-100 px-5 py-4">
         <div
           className="flex h-8 w-8 items-center justify-center rounded-lg text-white"
-          style={{ background: '#7c3aed' }}
+          style={{ background: toneBg }}
         >
           {icon}
         </div>
@@ -57,26 +100,186 @@ function Section({ icon, title, children }: SectionProps) {
   )
 }
 
+interface OptionRowProps<T extends string> {
+  label: string
+  description?: string
+  value: T
+  options: ReadonlyArray<{ value: T; label: string; icon?: React.ReactNode }>
+  onChange: (v: T) => void
+}
+
+function OptionRow<T extends string>({
+  label,
+  description,
+  value,
+  options,
+  onChange,
+}: OptionRowProps<T>) {
+  return (
+    <div>
+      <p className="mb-1 text-sm font-medium text-gray-900">{label}</p>
+      {description && <p className="mb-2 text-xs text-gray-500">{description}</p>}
+      <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={cn(
+              'flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold transition-all',
+              value === opt.value
+                ? 'bg-white text-purple-700 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700',
+            )}
+          >
+            {opt.icon}
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+interface ToggleRowProps {
+  label: string
+  description?: string
+  checked: boolean
+  onChange: (v: boolean) => void
+}
+
+function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
+  return (
+    <div className="flex items-start justify-between gap-3 py-2">
+      <div className="flex-1">
+        <p className="text-sm font-medium text-gray-900">{label}</p>
+        {description && <p className="mt-0.5 text-xs text-gray-500">{description}</p>}
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={cn(
+          'relative mt-1 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
+          checked ? 'bg-purple-600' : 'bg-gray-300',
+        )}
+      >
+        <span
+          className={cn(
+            'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
+            checked ? 'translate-x-5' : 'translate-x-0.5',
+          )}
+        />
+      </button>
+    </div>
+  )
+}
+
+function emitPrefsChanged() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('meraki:prefs-changed'))
+  }
+}
+
 export default function SettingsPage() {
   const router = useRouter()
   const owner = useUser()
+
+  /* ─────── Contraseña ─────── */
   const [currentPwd, setCurrentPwd] = useState('')
   const [newPwd, setNewPwd] = useState('')
   const [confirmPwd, setConfirmPwd] = useState('')
   const [loggingOut, setLoggingOut] = useState(false)
+
+  /* ─────── Preferencias visuales ─────── */
+  const [themeMode, setThemeModeState] = useState<ThemeMode>('light')
+  const [uiFontSize, setUiFontSizeState] = useState<UiFontSize>('medium')
+  const [uiDensity, setUiDensityState] = useState<UiDensity>('comfortable')
+  const [reduceMotion, setReduceMotionState] = useState(false)
+
+  /* ─────── Preferencias app ─────── */
+  const [currencyFormat, setCurrencyFormatState] = useState<CurrencyFormat>('cop-nodecimals')
+  const [soundsEnabled, setSoundsEnabledState] = useState(true)
+  const [confirmDestructive, setConfirmDestructiveState] = useState(true)
+  const [helpOpen, setHelpOpen] = useState(false)
+
+  /* ─────── Preferencias de impresión ─────── */
   const [printFontSize, setPrintFontSizeState] = useState<PrintFontSize>('medium')
+  const [autoOpenPrint, setAutoOpenPrintState] = useState(false)
+  const [showPrintLogo, setShowPrintLogoState] = useState(true)
 
   useEffect(() => {
+    setThemeModeState(getThemeMode(owner))
+    setUiFontSizeState(getUiFontSize(owner))
+    setUiDensityState(getUiDensity(owner))
+    setReduceMotionState(getReduceMotion(owner))
+    setCurrencyFormatState(getCurrencyFormat(owner))
+    setSoundsEnabledState(getSoundsEnabled(owner))
+    setConfirmDestructiveState(getConfirmDestructive(owner))
     setPrintFontSizeState(getPrintFontSize(owner))
+    setAutoOpenPrintState(getAutoOpenPrintDialog(owner))
+    setShowPrintLogoState(getShowPrintLogo(owner))
   }, [owner])
 
-  function handlePrintFontSizeChange(size: PrintFontSize) {
-    setPrintFontSizeState(size)
-    setPrintFontSize(owner, size)
-    toast.success(`Tamaño de letra: ${PRINT_FONT_LABELS[size]}`)
+  function handleThemeChange(v: ThemeMode) {
+    setThemeModeState(v)
+    setThemeMode(owner, v)
+    emitPrefsChanged()
+    toast.success(`Tema: ${THEME_LABELS[v]}`)
   }
 
-  // OpenAI API Key state
+  function handleUiFontChange(v: UiFontSize) {
+    setUiFontSizeState(v)
+    setUiFontSize(owner, v)
+    emitPrefsChanged()
+    toast.success(`Tamaño: ${UI_FONT_LABELS[v]}`)
+  }
+
+  function handleDensityChange(v: UiDensity) {
+    setUiDensityState(v)
+    setUiDensity(owner, v)
+    emitPrefsChanged()
+  }
+
+  function handleReduceMotionChange(v: boolean) {
+    setReduceMotionState(v)
+    setReduceMotion(owner, v)
+    emitPrefsChanged()
+  }
+
+  function handleCurrencyChange(v: CurrencyFormat) {
+    setCurrencyFormatState(v)
+    setCurrencyFormat(owner, v)
+  }
+
+  function handleSoundsChange(v: boolean) {
+    setSoundsEnabledState(v)
+    setSoundsEnabled(owner, v)
+  }
+
+  function handleConfirmDestructiveChange(v: boolean) {
+    setConfirmDestructiveState(v)
+    setConfirmDestructive(owner, v)
+  }
+
+  function handlePrintFontChange(v: PrintFontSize) {
+    setPrintFontSizeState(v)
+    setPrintFontSize(owner, v)
+    toast.success(`Letra de impresión: ${PRINT_FONT_LABELS[v]}`)
+  }
+
+  function handleAutoOpenPrintChange(v: boolean) {
+    setAutoOpenPrintState(v)
+    setAutoOpenPrintDialog(owner, v)
+  }
+
+  function handleShowPrintLogoChange(v: boolean) {
+    setShowPrintLogoState(v)
+    setShowPrintLogo(owner, v)
+  }
+
+  /* ─────── OpenAI API Key ─────── */
   const [apiKeyInput, setApiKeyInput] = useState('')
   const [apiKeyMasked, setApiKeyMasked] = useState<string | null>(null)
   const [apiKeyExists, setApiKeyExists] = useState(false)
@@ -143,7 +346,6 @@ export default function SettingsPage() {
       if (!res.ok && data.error?.toLowerCase().includes('api key')) {
         throw new Error(data.error)
       }
-      // Any response that isn't an auth error means the key works
       toast.success('Conexión con OpenAI exitosa')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al conectar con OpenAI'
@@ -177,15 +379,62 @@ export default function SettingsPage() {
     }
   }
 
+  /* ─────── Wipe cuenta ─────── */
+  const [wipeOpen, setWipeOpen] = useState(false)
+  const [wipeText, setWipeText] = useState('')
+  const [wiping, setWiping] = useState(false)
+
+  async function handleWipeAccount() {
+    if (wipeText.trim() !== 'Acepto') {
+      toast.error('Debes escribir exactamente "Acepto" para confirmar')
+      return
+    }
+    setWiping(true)
+    try {
+      const res = await fetch('/api/account/wipe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmation: wipeText.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Error al eliminar datos')
+
+      clearAllPreferences(owner)
+      emitPrefsChanged()
+
+      toast.success('Cuenta restablecida. Todos los datos fueron eliminados.')
+      setWipeOpen(false)
+      setWipeText('')
+      setTimeout(() => router.push('/dashboard'), 800)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al eliminar'
+      toast.error(msg)
+    } finally {
+      setWiping(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-4 shadow-sm">
-        <div className="mx-auto max-w-xl">
-          <h1 className="text-xl font-bold text-gray-900">Configuración</h1>
-          <p className="text-xs text-gray-500">Tu Tienda Meraki</p>
+        <div className="mx-auto max-w-xl flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold text-gray-900">Configuración</h1>
+            <p className="text-xs text-gray-500">Tu Tienda Meraki</p>
+          </div>
+          <button
+            onClick={() => setHelpOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition-all hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700"
+            title="¿Qué hace esta pantalla?"
+            aria-label="Ayuda de Configuración"
+          >
+            <HelpCircle className="h-4 w-4" />
+            <span className="hidden sm:inline">Ayuda</span>
+          </button>
         </div>
       </div>
+      {helpOpen && <PageHelpModal content={SETTINGS_HELP} onClose={() => setHelpOpen(false)} />}
 
       <div className="mx-auto max-w-xl px-4 py-4 space-y-4">
         {/* Perfil */}
@@ -195,18 +444,109 @@ export default function SettingsPage() {
               className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-2xl font-black text-white"
               style={{ background: 'linear-gradient(135deg, #7c3aed, #f59e0b)' }}
             >
-              P
+              {(owner?.[0] ?? 'P').toUpperCase()}
             </div>
             <div>
-              <p className="text-lg font-bold text-gray-900">Paola</p>
+              <p className="text-lg font-bold text-gray-900">{owner || 'Paola'}</p>
               <p className="text-sm text-gray-500">Administradora</p>
               <p className="text-xs text-gray-400 mt-0.5">Tu Tienda Meraki</p>
             </div>
           </div>
         </Section>
 
+        {/* Apariencia */}
+        <Section icon={<Palette className="h-4 w-4" />} title="Apariencia">
+          <div className="space-y-5">
+            <OptionRow<ThemeMode>
+              label="Tema"
+              description="Modo oscuro protege tus ojos de noche."
+              value={themeMode}
+              onChange={handleThemeChange}
+              options={[
+                { value: 'light', label: 'Claro', icon: <Sun className="h-4 w-4" /> },
+                { value: 'dark', label: 'Oscuro', icon: <Moon className="h-4 w-4" /> },
+                { value: 'system', label: 'Sistema', icon: <Monitor className="h-4 w-4" /> },
+              ]}
+            />
+
+            <OptionRow<UiFontSize>
+              label="Tamaño de letra"
+              description="Aumenta el texto para leer más fácil."
+              value={uiFontSize}
+              onChange={handleUiFontChange}
+              options={[
+                { value: 'small', label: 'S' },
+                { value: 'medium', label: 'M' },
+                { value: 'large', label: 'L' },
+                { value: 'xlarge', label: 'XL' },
+              ]}
+            />
+
+            <OptionRow<UiDensity>
+              label="Densidad"
+              description="Compacta muestra más información en pantalla."
+              value={uiDensity}
+              onChange={handleDensityChange}
+              options={[
+                { value: 'comfortable', label: 'Cómoda', icon: <LayoutGrid className="h-4 w-4" /> },
+                { value: 'compact', label: 'Compacta', icon: <LayoutGrid className="h-4 w-4" /> },
+              ]}
+            />
+
+            <ToggleRow
+              label="Reducir animaciones"
+              description="Minimiza transiciones y efectos para mayor comodidad visual."
+              checked={reduceMotion}
+              onChange={handleReduceMotionChange}
+            />
+          </div>
+        </Section>
+
+        {/* Preferencias de la aplicación */}
+        <Section icon={<Sparkles className="h-4 w-4" />} title="Preferencias generales">
+          <div className="space-y-4">
+            <div>
+              <p className="mb-1 text-sm font-medium text-gray-900 flex items-center gap-1.5">
+                <DollarSign className="h-4 w-4 text-gray-500" />
+                Formato de moneda
+              </p>
+              <div className="flex flex-col gap-1 rounded-xl bg-gray-100 p-1">
+                {(Object.keys(CURRENCY_LABELS) as CurrencyFormat[]).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => handleCurrencyChange(v)}
+                    className={cn(
+                      'rounded-lg px-3 py-2 text-sm font-medium text-left transition-all',
+                      currencyFormat === v
+                        ? 'bg-white text-purple-700 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-800',
+                    )}
+                  >
+                    {CURRENCY_LABELS[v]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <ToggleRow
+              label="Sonidos de confirmación"
+              description="Pequeños beeps al guardar o completar acciones."
+              checked={soundsEnabled}
+              onChange={handleSoundsChange}
+            />
+
+            <ToggleRow
+              label="Confirmar antes de borrar"
+              description="Pide confirmación antes de eliminar pedidos, productos o inventario."
+              checked={confirmDestructive}
+              onChange={handleConfirmDestructiveChange}
+            />
+          </div>
+        </Section>
+
         {/* Cambiar contraseña */}
-        <Section icon={<Lock className="h-4 w-4" />} title="Cambiar Contraseña">
+        <Section icon={<Lock className="h-4 w-4" />} title="Cambiar contraseña">
           <form onSubmit={handlePasswordChange} className="space-y-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">
@@ -259,7 +599,6 @@ export default function SettingsPage() {
 
         {/* API de IA */}
         <Section icon={<Cpu className="h-4 w-4" />} title="API de IA">
-          {/* Status row */}
           <div className="flex items-center justify-between gap-3 mb-4">
             <div>
               <p className="text-sm font-medium text-gray-900">OpenAI API Key</p>
@@ -282,7 +621,6 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Current masked value */}
           {apiKeyExists && apiKeyMasked && (
             <p className="mb-3 flex items-center gap-1.5 text-xs text-gray-500 font-mono">
               <Key className="h-3.5 w-3.5 shrink-0" />
@@ -290,7 +628,6 @@ export default function SettingsPage() {
             </p>
           )}
 
-          {/* Input field */}
           <div className="space-y-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">
@@ -319,7 +656,6 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* Action buttons */}
             <div className="flex gap-2">
               <button
                 type="button"
@@ -347,7 +683,7 @@ export default function SettingsPage() {
                 {testingKey
                   ? <Loader2 className="h-4 w-4 animate-spin" />
                   : <Zap className="h-4 w-4" />}
-                Probar Conexión
+                Probar conexión
               </button>
             </div>
           </div>
@@ -358,11 +694,52 @@ export default function SettingsPage() {
         </Section>
 
         {/* Importar datos */}
-        <Section icon={<Zap className="h-4 w-4" />} title="Importar Datos">
+        <Section icon={<Zap className="h-4 w-4" />} title="Importar datos">
           <p className="text-xs text-gray-500 mb-3">
             Sube un archivo Excel (.xlsx) con pedidos, inventario o productos. El sistema detecta el tipo automáticamente.
           </p>
           <ExcelImport />
+        </Section>
+
+        {/* Preferencias de impresión */}
+        <Section icon={<Printer className="h-4 w-4" />} title="Preferencias de impresión">
+          <div className="space-y-5">
+            <OptionRow<PrintFontSize>
+              label="Tamaño de letra en guía"
+              description="Se aplica al imprimir guías de despacho (papel térmico 58mm)."
+              value={printFontSize}
+              onChange={handlePrintFontChange}
+              options={[
+                { value: 'small', label: PRINT_FONT_LABELS.small },
+                { value: 'medium', label: PRINT_FONT_LABELS.medium },
+                { value: 'large', label: PRINT_FONT_LABELS.large },
+              ]}
+            />
+
+            <ToggleRow
+              label="Abrir diálogo de impresión automáticamente"
+              description="Al abrir una guía, abre directo el diálogo del sistema."
+              checked={autoOpenPrint}
+              onChange={handleAutoOpenPrintChange}
+            />
+
+            <ToggleRow
+              label="Mostrar logo en guías"
+              description="Incluye el logo de Tu Tienda Meraki en la cabecera de cada guía."
+              checked={showPrintLogo}
+              onChange={handleShowPrintLogoChange}
+            />
+
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-gray-700">
+                <ImageIcon className="h-3.5 w-3.5" />
+                Impresora recomendada
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                XP-56C térmica 58mm. Configurar márgenes en 0mm y tamaño de papel en 58mm.
+              </p>
+            </div>
+          </div>
         </Section>
 
         {/* Negocio */}
@@ -389,29 +766,30 @@ export default function SettingsPage() {
           </p>
         </Section>
 
-        {/* Preferencias de impresión */}
-        <Section icon={<Type className="h-4 w-4" />} title="Preferencias de impresión">
-          <div>
-            <p className="mb-2 text-xs text-gray-500">
-              Tamaño de letra en la guía de despacho (se guarda para tu cuenta y aplica cada vez que imprimas).
-            </p>
-            <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
-              {(Object.keys(PRINT_FONT_LABELS) as PrintFontSize[]).map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  onClick={() => handlePrintFontSizeChange(size)}
-                  className={cn(
-                    'flex-1 rounded-lg py-2 text-sm font-semibold transition-all',
-                    printFontSize === size
-                      ? 'bg-white text-purple-700 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700',
-                  )}
-                >
-                  {PRINT_FONT_LABELS[size]}
-                </button>
-              ))}
+        {/* Zona peligrosa */}
+        <Section
+          icon={<ShieldAlert className="h-4 w-4" />}
+          title="Zona peligrosa"
+          tone="red"
+        >
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-medium text-gray-900">
+                Eliminar todos los datos de la cuenta
+              </p>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Borra pedidos, inventario, productos, gastos y preferencias.
+                La cuenta queda como nueva. Esta acción es <b>irreversible</b>.
+              </p>
             </div>
+            <button
+              type="button"
+              onClick={() => setWipeOpen(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50 transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+              Eliminar todos los datos
+            </button>
           </div>
         </Section>
 
@@ -482,6 +860,67 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
+
+      {/* Modal: confirmar borrado total */}
+      {wipeOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center gap-3 border-b border-gray-100 bg-red-50 px-5 py-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500 text-white">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900">Eliminar todos los datos</h3>
+                <p className="text-xs text-gray-500">Esta acción no se puede deshacer</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 px-5 py-4">
+              <p className="text-sm text-gray-700">
+                Se eliminarán <b>todos</b> los pedidos, inventario, productos, gastos
+                y tus preferencias. La cuenta quedará como nueva.
+              </p>
+              <p className="text-sm text-gray-700">
+                Para confirmar, escribe exactamente <b>Acepto</b> en el campo de abajo:
+              </p>
+              <input
+                type="text"
+                value={wipeText}
+                onChange={(e) => setWipeText(e.target.value)}
+                placeholder="Escribe: Acepto"
+                autoFocus
+                spellCheck={false}
+                className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-200"
+              />
+            </div>
+
+            <div className="flex gap-2 border-t border-gray-100 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setWipeOpen(false)
+                  setWipeText('')
+                }}
+                disabled={wiping}
+                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleWipeAccount}
+                disabled={wiping || wipeText.trim() !== 'Acepto'}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:bg-red-300"
+              >
+                {wiping
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <Trash2 className="h-4 w-4" />}
+                Eliminar cuenta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,0 +1,70 @@
+'use client';
+
+import { useEffect } from 'react';
+import { useUser } from '@/lib/UserContext';
+import {
+  getThemeMode,
+  getUiFontSize,
+  getUiDensity,
+  getReduceMotion,
+  UI_FONT_SCALE,
+  type ThemeMode,
+} from '@/lib/preferences';
+
+function resolveTheme(mode: ThemeMode): 'light' | 'dark' {
+  if (mode === 'system') {
+    const prefersDark = typeof window !== 'undefined'
+      && window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+    return prefersDark ? 'dark' : 'light';
+  }
+  return mode;
+}
+
+/**
+ * Aplica en <html> las preferencias visuales (tema, tamaño de letra UI,
+ * densidad, animaciones reducidas) leídas de localStorage para el owner.
+ *
+ * Se re-ejecuta al recibir el evento "meraki:prefs-changed" para que
+ * cualquier cambio en /settings se refleje al instante en toda la app.
+ */
+export default function PrefsApplier() {
+  const owner = useUser();
+
+  useEffect(() => {
+    function apply() {
+      const root = document.documentElement;
+
+      const mode = getThemeMode(owner);
+      const theme = resolveTheme(mode);
+      root.dataset.theme = theme;
+      if (theme === 'dark') root.classList.add('dark');
+      else root.classList.remove('dark');
+
+      const uiSize = getUiFontSize(owner);
+      root.dataset.uiFont = uiSize;
+      root.style.setProperty('--ui-font-scale', String(UI_FONT_SCALE[uiSize]));
+
+      const density = getUiDensity(owner);
+      root.dataset.density = density;
+
+      const reduced = getReduceMotion(owner);
+      root.dataset.reduceMotion = reduced ? '1' : '0';
+    }
+
+    apply();
+
+    const mql = window.matchMedia?.('(prefers-color-scheme: dark)');
+    const onSystemChange = () => {
+      if (getThemeMode(owner) === 'system') apply();
+    };
+    mql?.addEventListener?.('change', onSystemChange);
+
+    window.addEventListener('meraki:prefs-changed', apply);
+    return () => {
+      mql?.removeEventListener?.('change', onSystemChange);
+      window.removeEventListener('meraki:prefs-changed', apply);
+    };
+  }, [owner]);
+
+  return null;
+}

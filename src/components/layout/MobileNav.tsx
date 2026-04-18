@@ -8,6 +8,7 @@ import {
   Plus,
   Package,
   Truck,
+  Settings,
 } from 'lucide-react';
 
 const navItems = [
@@ -16,6 +17,7 @@ const navItems = [
   { href: '/assistant', label: 'Asistente', icon: Plus, isAccent: true },
   { href: '/inventory', label: 'Inventario', icon: Package },
   { href: '/dispatch', label: 'Despacho', icon: Truck },
+  { href: '/settings', label: 'Config', icon: Settings },
 ];
 
 export default function MobileNav() {

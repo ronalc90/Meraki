@@ -13,6 +13,7 @@ import {
   Navigation,
   Package,
   DollarSign,
+  HelpCircle,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
@@ -22,6 +23,8 @@ import { useUser } from '@/lib/UserContext'
 import { isOwnerSupported } from '@/lib/db'
 import { GuideCard } from '@/components/dispatch/DispatchGuide'
 import WhatsAppLink from '@/components/shared/WhatsAppLink'
+import PageHelpModal from '@/components/shared/PageHelpModal'
+import { DISPATCH_HELP } from '@/lib/pageHelp'
 
 function todayISO(): string {
   const d = new Date()
@@ -346,6 +349,7 @@ export default function DispatchPage() {
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [activeView, setActiveView] = useState<ViewMode | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const loadOrders = useCallback(async (d: string) => {
     setLoading(true)
@@ -402,6 +406,14 @@ export default function DispatchPage() {
               <p className="text-xs text-gray-500">Pedidos confirmados para despachar</p>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setHelpOpen(true)}
+                className="flex items-center justify-center rounded-xl border border-gray-200 p-2 text-gray-600 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-700 transition-colors"
+                title="¿Qué hace esta pantalla?"
+                aria-label="Ayuda de Despacho"
+              >
+                <HelpCircle className="h-4 w-4" />
+              </button>
               <Truck className="h-4 w-4 text-gray-400" />
               <input
                 type="date"
@@ -413,6 +425,8 @@ export default function DispatchPage() {
           </div>
         </div>
       </div>
+
+      {helpOpen && <PageHelpModal content={DISPATCH_HELP} onClose={() => setHelpOpen(false)} />}
 
       <div className="mx-auto max-w-3xl px-4 py-4 space-y-3">
         {loading ? (
