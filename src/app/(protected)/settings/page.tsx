@@ -39,6 +39,7 @@ import {
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils'
 import { APP_VERSION } from '@/lib/version'
+import { CHANGELOG } from '@/lib/changelog'
 import {
   getPrintFontSize,
   setPrintFontSize,
@@ -464,6 +465,9 @@ export default function SettingsPage() {
   const [wipeOpen, setWipeOpen] = useState(false)
   const [wipeText, setWipeText] = useState('')
   const [wiping, setWiping] = useState(false)
+
+  /* ─────── Changelog ─────── */
+  const [changelogOpen, setChangelogOpen] = useState(false)
 
   async function handleWipeAccount() {
     if (wipeText.trim() !== 'Acepto') {
@@ -964,8 +968,17 @@ export default function SettingsPage() {
           <dl className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <dt className="text-sm text-gray-500">Versión</dt>
-              <dd className="text-sm font-mono font-semibold text-gray-900">
-                {APP_VERSION}
+              <dd>
+                <button
+                  type="button"
+                  onClick={() => setChangelogOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-sm font-mono font-semibold text-purple-700 transition-colors hover:bg-purple-100"
+                  title="Ver qué trajo cada versión"
+                  aria-label="Ver historial de versiones"
+                >
+                  {APP_VERSION}
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
               </dd>
             </div>
             <div className="flex items-center justify-between gap-2">
@@ -973,7 +986,7 @@ export default function SettingsPage() {
               <dd className="text-sm font-semibold text-gray-900">Ronald · Koptup</dd>
             </div>
             <p className="pt-1 text-xs text-gray-400">
-              Cada nuevo cambio entregado sube la versión 0.001.
+              Toca la versión para ver qué mejoró en cada entrega.
             </p>
           </dl>
 
@@ -1026,6 +1039,79 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
+
+      {/* Modal: historial de versiones (changelog) */}
+      {changelogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
+          onClick={() => setChangelogOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg max-h-[85vh] overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 border-b border-gray-100 bg-purple-50 px-5 py-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600 text-white">
+                <Info className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold text-gray-900">Historial de versiones</h3>
+                <p className="text-xs text-gray-500">Qué trajo cada entrega de Meraki</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setChangelogOpen(false)}
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-white hover:text-gray-600"
+                aria-label="Cerrar"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
+              <ol className="space-y-5">
+                {CHANGELOG.map((entry, idx) => (
+                  <li key={entry.version} className="relative pl-5">
+                    <span
+                      className={cn(
+                        'absolute left-0 top-1.5 h-2.5 w-2.5 rounded-full border-2',
+                        idx === 0
+                          ? 'border-purple-600 bg-purple-500'
+                          : 'border-gray-300 bg-white',
+                      )}
+                    />
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-mono text-sm font-bold text-gray-900">
+                        v{entry.version}
+                      </span>
+                      {idx === 0 && (
+                        <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-semibold text-purple-700">
+                          Actual
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-400">{entry.date}</span>
+                    </div>
+                    <ul className="mt-1.5 space-y-1">
+                      {entry.highlights.map((h, i) => (
+                        <li
+                          key={i}
+                          className="flex gap-2 text-sm text-gray-700 leading-snug"
+                        >
+                          <span className="text-purple-500 shrink-0">•</span>
+                          <span>{h}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-6 rounded-xl bg-gray-50 px-3 py-2 text-[11px] text-gray-500">
+                Cada entrega sube la versión en 0.001. La lista se actualiza con cada despliegue.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal: confirmar borrado total */}
       {wipeOpen && (
