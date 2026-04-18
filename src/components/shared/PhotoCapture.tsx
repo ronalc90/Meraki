@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { Camera, Upload, X, Loader2, RotateCcw } from 'lucide-react';
+import { Camera, Upload, X, Loader2, RotateCcw, Maximize2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import ImageLightbox from './ImageLightbox';
 
 interface PhotoCaptureProps {
   onPhotoReady: (imageUrl: string) => void;
@@ -14,6 +15,7 @@ export default function PhotoCapture({ onPhotoReady, currentUrl, compact }: Phot
   const [preview, setPreview] = useState<string | null>(currentUrl || null);
   const [uploading, setUploading] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [showLightbox, setShowLightbox] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -150,26 +152,57 @@ export default function PhotoCapture({ onPhotoReady, currentUrl, compact }: Phot
       {/* Preview */}
       {preview && !showCamera && (
         <div className="relative rounded-xl overflow-hidden bg-gray-100">
-          <img src={preview} alt="Producto" className="w-full max-h-48 object-cover" />
+          <button
+            type="button"
+            onClick={() => !uploading && setShowLightbox(true)}
+            className="block w-full cursor-zoom-in"
+            aria-label="Ver foto ampliada"
+            disabled={uploading}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={preview} alt="Producto" className="w-full max-h-48 object-cover" />
+          </button>
           {uploading && (
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+            <div className="pointer-events-none absolute inset-0 bg-black/40 flex items-center justify-center">
               <Loader2 className="w-6 h-6 animate-spin text-white" />
             </div>
           )}
           <div className="absolute top-2 right-2 flex gap-1">
             <button
               type="button"
-              onClick={removePhoto}
-              className="w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-red-500 transition"
+              onClick={() => setShowLightbox(true)}
+              className="w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-purple-500 transition"
+              aria-label="Ampliar"
+              title="Ampliar"
             >
-              <X className="w-4 h-4" />
+              <Maximize2 className="w-3.5 h-3.5" />
             </button>
             <button
               type="button"
               onClick={startCamera}
               className="w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-purple-500 transition"
+              aria-label="Cambiar foto"
+              title="Cambiar foto"
             >
               <RotateCcw className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-purple-500 transition"
+              aria-label="Subir otra"
+              title="Subir otra"
+            >
+              <Upload className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={removePhoto}
+              className="w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-red-500 transition"
+              aria-label="Eliminar foto"
+              title="Eliminar foto"
+            >
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -194,11 +227,15 @@ export default function PhotoCapture({ onPhotoReady, currentUrl, compact }: Phot
             <Upload className="w-5 h-5" />
             Subir imagen
           </button>
-          <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
         </div>
       )}
 
+      <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
       <canvas ref={canvasRef} className="hidden" />
+
+      {showLightbox && preview && (
+        <ImageLightbox src={preview} onClose={() => setShowLightbox(false)} />
+      )}
     </div>
   );
 }

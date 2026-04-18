@@ -9,6 +9,7 @@ import { isOwnerSupported } from '@/lib/db';
 import { formatCurrency, generateOrderCode, parseCopAmount } from '@/lib/utils';
 import DispatchGuide from '@/components/dispatch/DispatchGuide';
 import AssistantHelpModal from '@/components/assistant/AssistantHelpModal';
+import ImageLightbox from '@/components/shared/ImageLightbox';
 import { downloadExcel } from '@/lib/export';
 
 interface SubAction {
@@ -131,6 +132,7 @@ export default function AssistantPage() {
   const [selectedItem, setSelectedItem] = useState<Record<string, unknown> | null>(null);
   const [chatLoaded, setChatLoaded] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -799,6 +801,10 @@ export default function AssistantPage() {
     <>
       {chatUI}
 
+      {lightboxSrc && (
+        <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+      )}
+
       {/* Dispatch Guide Modal with font size selector + isolated print */}
       {showGuide && (
         <DispatchGuide
@@ -822,9 +828,15 @@ export default function AssistantPage() {
           <div className="bg-white rounded-t-2xl md:rounded-2xl w-full max-w-sm max-h-[85dvh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
             {/* Photo */}
             {selectedItem.image_url ? (
-              <div className="w-full h-48 bg-gray-100 rounded-t-2xl md:rounded-t-2xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setLightboxSrc(String(selectedItem.image_url))}
+                className="block w-full h-48 bg-gray-100 rounded-t-2xl md:rounded-t-2xl overflow-hidden cursor-zoom-in"
+                aria-label="Ver foto ampliada"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={String(selectedItem.image_url)} alt="" className="w-full h-full object-cover" />
-              </div>
+              </button>
             ) : null}
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
