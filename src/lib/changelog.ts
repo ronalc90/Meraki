@@ -12,6 +12,20 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.010',
+    date: '2026-04-17',
+    highlights: [
+      'Pedidos: el tipo de pago ahora se diferencia explícitamente — Contra entrega, Pago anticipado (ya pagó), Mixto (abono + saldo) y Otro (fiado, canje, especie).',
+      'Guía de despacho: cuando el pedido es pago anticipado muestra un sello grande "YA PAGADO" para que el despachador no cobre nada. En Mixto muestra el abono y el saldo a cobrar.',
+      'Nuevo Pedido: selector de tipo de pago con lógica automática (Anticipado marca el total como pagado, Mixto pide el abono, Contra entrega mantiene los 3 canales de recaudo).',
+      'Lista de pedidos: nuevo filtro "Tipo de pago" junto a los demás filtros en modo Lista.',
+      'Asistente por voz: entiende "ya pagó por Nequi", "abonó 30 mil y el resto al entregar", "fiado hasta el lunes" y guarda el tipo de pago correcto con el canal del abono.',
+      'Contabilidad: cuando se vende un producto que no está en inventario, se crea automáticamente un registro en inventario con cantidad 0 y el costo de referencia del catálogo — así la contabilidad conserva el costo histórico del producto vendido.',
+      'Inventario: ya no puede quedar en negativo. Si intenta descontar más de lo que hay, queda en 0.',
+      'Requiere migración SQL (nueva columna payment_timing). El código es compatible con bases sin migrar — sigue funcionando, sólo que no guarda el tipo de pago hasta que corras el ALTER TABLE.',
+    ],
+  },
+  {
     version: '1.009',
     date: '2026-04-17',
     highlights: [

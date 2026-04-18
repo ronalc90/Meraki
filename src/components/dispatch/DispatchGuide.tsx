@@ -32,6 +32,20 @@ interface OrderData {
   detail: string;
   value_to_collect: number;
   comment: string;
+  payment_timing?: 'Anticipado' | 'ContraEntrega' | 'Mixto' | 'Otro' | '';
+  prepaid_amount?: number;
+}
+
+/** El despachador no debe cobrar nada si todo el pedido está pagado por anticipado. */
+function isFullyPrepaid(order: OrderData): boolean {
+  if (order.payment_timing === 'Anticipado') return true;
+  const prepaid = order.prepaid_amount ?? 0;
+  return prepaid > 0 && prepaid >= order.value_to_collect;
+}
+
+function pendingAmount(order: OrderData): number {
+  const prepaid = order.prepaid_amount ?? 0;
+  return Math.max(0, order.value_to_collect - prepaid);
 }
 
 interface DispatchGuideProps {
@@ -227,7 +241,40 @@ export function GuideCard({
         <GuideRow value={order.complement} bodyPt={resolved.body} boldPt={resolved.bold} />
         <GuideRow value={order.product_ref} bodyPt={resolved.body} boldPt={resolved.bold} />
         <GuideRow value={order.detail} bodyPt={resolved.body} boldPt={resolved.bold} />
-        <GuideRow value={formatCurrency(order.value_to_collect)} bold bodyPt={resolved.body} boldPt={resolved.bold} />
+        {isFullyPrepaid(order) ? (
+          <div className="border-b-2 border-black px-2 py-1.5 bg-emerald-100" style={{ textAlign: 'center' }}>
+            <p
+              className="font-black uppercase tracking-wide text-emerald-800"
+              style={{ fontSize: `${resolved.bold}pt`, lineHeight: 1.1 }}
+            >
+              YA PAGADO
+            </p>
+            <p className="text-gray-700" style={{ fontSize: `${resolved.footer}pt` }}>
+              No recaudar: {formatCurrency(order.value_to_collect)}
+            </p>
+          </div>
+        ) : order.payment_timing === 'Mixto' && (order.prepaid_amount ?? 0) > 0 ? (
+          <>
+            <div className="border-b border-amber-400 px-2 py-1 bg-amber-50">
+              <p className="font-bold text-amber-900" style={{ fontSize: `${resolved.body}pt` }}>
+                Abono: {formatCurrency(order.prepaid_amount ?? 0)}
+              </p>
+            </div>
+            <GuideRow
+              value={`Saldo a cobrar: ${formatCurrency(pendingAmount(order))}`}
+              bold
+              bodyPt={resolved.body}
+              boldPt={resolved.bold}
+            />
+          </>
+        ) : (
+          <GuideRow
+            value={formatCurrency(order.value_to_collect)}
+            bold
+            bodyPt={resolved.body}
+            boldPt={resolved.bold}
+          />
+        )}
         <GuideRow value={order.comment} bodyPt={resolved.body} boldPt={resolved.bold} />
       </div>
 

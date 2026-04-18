@@ -127,6 +127,7 @@ export default function OrdersPage({
   const [filterProduct, setFilterProduct] = useState<string>('')
   const [filterSize, setFilterSize] = useState<string>('')
   const [filterColor, setFilterColor] = useState<string>('')
+  const [filterPaymentTiming, setFilterPaymentTiming] = useState<string>('')
 
   function clearAllFilters() {
     setSearchText('')
@@ -137,6 +138,7 @@ export default function OrdersPage({
     setFilterProduct('')
     setFilterSize('')
     setFilterColor('')
+    setFilterPaymentTiming('')
   }
 
   const todayStr = `${now.getFullYear()}-${padDate(now.getMonth() + 1)}-${padDate(now.getDate())}`
@@ -217,7 +219,7 @@ export default function OrdersPage({
   // En modo Lista aplicamos todos los filtros; en Calendario solo el del mes.
   const hasActiveFilters = Boolean(
     searchText || filterStatus || filterVendor || filterDeliveryType
-    || filterCity || filterProduct || filterSize || filterColor,
+    || filterCity || filterProduct || filterSize || filterColor || filterPaymentTiming,
   )
 
   const filteredOrders = viewMode === 'list'
@@ -229,6 +231,10 @@ export default function OrdersPage({
         if (filterProduct && o.product_ref !== filterProduct) return false
         if (filterSize && pickDetailField(o.detail, 'Talla').toLowerCase() !== filterSize.toLowerCase()) return false
         if (filterColor && pickDetailField(o.detail, 'Color').toLowerCase() !== filterColor.toLowerCase()) return false
+        if (filterPaymentTiming) {
+          const t = o.payment_timing || (o.prepaid_amount > 0 ? 'Mixto' : 'ContraEntrega')
+          if (t !== filterPaymentTiming) return false
+        }
         if (searchText.trim()) {
           const q = searchText.trim().toLowerCase()
           const haystack = [
@@ -535,6 +541,8 @@ export default function OrdersPage({
           setFilterSize={setFilterSize}
           filterColor={filterColor}
           setFilterColor={setFilterColor}
+          filterPaymentTiming={filterPaymentTiming}
+          setFilterPaymentTiming={setFilterPaymentTiming}
           onRowClick={(o) => router.push(`/orders/daily/${o.order_date}`)}
         />
       )}
@@ -669,6 +677,8 @@ interface OrdersListProps {
   setFilterSize: (v: string) => void
   filterColor: string
   setFilterColor: (v: string) => void
+  filterPaymentTiming: string
+  setFilterPaymentTiming: (v: string) => void
   onRowClick: (order: Order) => void
 }
 
@@ -696,6 +706,8 @@ function OrdersList({
   setFilterSize,
   filterColor,
   setFilterColor,
+  filterPaymentTiming,
+  setFilterPaymentTiming,
   onRowClick,
 }: OrdersListProps) {
   return (
@@ -752,6 +764,17 @@ function OrdersList({
           >
             <option value="">Producto (todos)</option>
             {uniqueProducts.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <select
+            value={filterPaymentTiming}
+            onChange={(e) => setFilterPaymentTiming(e.target.value)}
+            className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300"
+          >
+            <option value="">Tipo de pago (todos)</option>
+            <option value="ContraEntrega">Contra entrega</option>
+            <option value="Anticipado">Pago anticipado</option>
+            <option value="Mixto">Mixto (abono)</option>
+            <option value="Otro">Otro</option>
           </select>
           {uniqueSizes.length > 0 && (
             <select

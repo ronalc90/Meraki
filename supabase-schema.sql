@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS orders (
   guide_number TEXT,
   prepaid_amount INTEGER DEFAULT 0,
   operating_cost INTEGER DEFAULT 0,
+  payment_timing VARCHAR(20) DEFAULT 'ContraEntrega', -- v1.010
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
