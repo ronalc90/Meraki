@@ -291,10 +291,10 @@ export default function ProductsPage({
             {products.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setHelpOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700"
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700"
             title="¿Qué hace esta pantalla?"
             aria-label="Ayuda de Productos"
           >
@@ -309,25 +309,28 @@ export default function ProductsPage({
                 toast.error('Error al exportar')
               }
             }}
-            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700"
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700"
+            aria-label="Exportar productos"
           >
             <Download className="h-4 w-4" />
             <span className="hidden sm:inline">Exportar</span>
           </button>
           <button
             onClick={() => setShowPhotoAI(true)}
-            className="inline-flex items-center gap-2 rounded-xl border-2 border-purple-300 bg-purple-50 px-4 py-2.5 text-sm font-semibold text-purple-700 transition-all hover:bg-purple-100"
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl border-2 border-purple-300 bg-purple-50 px-3 py-2.5 text-sm font-semibold text-purple-700 transition-all hover:bg-purple-100"
+            aria-label="Nuevo producto con foto IA"
           >
             <Camera className="h-4 w-4" />
             <span className="hidden sm:inline">Con Foto IA</span>
           </button>
           <button
             onClick={openAdd}
-            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 active:translate-y-0"
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 active:translate-y-0 sm:flex-none"
             style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #9061f9 100%)' }}
           >
             <Plus className="h-4 w-4" />
-            Nuevo Producto
+            <span className="sm:inline">Nuevo</span>
+            <span className="hidden sm:inline">&nbsp;Producto</span>
           </button>
         </div>
       </div>

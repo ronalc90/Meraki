@@ -39,6 +39,7 @@ import {
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils'
 import { APP_VERSION } from '@/lib/version'
+import { CHANGELOG } from '@/lib/changelog'
 import {
   getPrintFontSize,
   setPrintFontSize,
@@ -79,6 +80,7 @@ import {
 import { useUser } from '@/lib/UserContext'
 import ExcelImport from '@/components/shared/ExcelImport'
 import { GuideCard } from '@/components/dispatch/DispatchGuide'
+import { playSuccess, playTick, playError } from '@/lib/sound'
 import PageHelpModal from '@/components/shared/PageHelpModal'
 import { SETTINGS_HELP } from '@/lib/pageHelp'
 
@@ -190,6 +192,11 @@ function emitPrefsChanged() {
   }
 }
 
+function resolvedSystemLabel(): 'Claro' | 'Oscuro' {
+  if (typeof window === 'undefined') return 'Claro'
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'Oscuro' : 'Claro'
+}
+
 function PrintSizeStepper({
   label,
   value,
@@ -275,13 +282,15 @@ export default function SettingsPage() {
     setThemeModeState(v)
     setThemeMode(owner, v)
     emitPrefsChanged()
-    toast.success(`Tema: ${THEME_LABELS[v]}`)
+    playSuccess(owner)
+    toast.success(`Tema: ${THEME_LABELS[v]}${v === 'system' ? ` (${resolvedSystemLabel()})` : ''}`)
   }
 
   function handleUiFontChange(v: UiFontSize) {
     setUiFontSizeState(v)
     setUiFontSize(owner, v)
     emitPrefsChanged()
+    playSuccess(owner)
     toast.success(`Tamaño: ${UI_FONT_LABELS[v]}`)
   }
 
@@ -289,32 +298,44 @@ export default function SettingsPage() {
     setUiDensityState(v)
     setUiDensity(owner, v)
     emitPrefsChanged()
+    playTick(owner)
   }
 
   function handleReduceMotionChange(v: boolean) {
     setReduceMotionState(v)
     setReduceMotion(owner, v)
     emitPrefsChanged()
+    playTick(owner)
   }
 
   function handleCurrencyChange(v: CurrencyFormat) {
     setCurrencyFormatState(v)
     setCurrencyFormat(owner, v)
+    playTick(owner)
   }
 
   function handleSoundsChange(v: boolean) {
     setSoundsEnabledState(v)
     setSoundsEnabled(owner, v)
+    // Sonar solo al activar, para que el usuario escuche la diferencia.
+    if (v) {
+      setTimeout(() => playSuccess(owner), 60)
+      toast.success('Sonidos activados')
+    } else {
+      toast('Sonidos apagados', { icon: '🔇' })
+    }
   }
 
   function handleConfirmDestructiveChange(v: boolean) {
     setConfirmDestructiveState(v)
     setConfirmDestructive(owner, v)
+    playTick(owner)
   }
 
   function handlePrintFontChange(v: PrintFontSize) {
     setPrintFontSizeState(v)
     setPrintFontSize(owner, v)
+    playTick(owner)
     toast.success(`Letra de impresión: ${PRINT_FONT_LABELS[v]}`)
   }
 
@@ -445,8 +466,12 @@ export default function SettingsPage() {
   const [wipeText, setWipeText] = useState('')
   const [wiping, setWiping] = useState(false)
 
+  /* ─────── Changelog ─────── */
+  const [changelogOpen, setChangelogOpen] = useState(false)
+
   async function handleWipeAccount() {
     if (wipeText.trim() !== 'Acepto') {
+      playError(owner)
       toast.error('Debes escribir exactamente "Acepto" para confirmar')
       return
     }
@@ -463,7 +488,8 @@ export default function SettingsPage() {
       clearAllPreferences(owner)
       emitPrefsChanged()
 
-      toast.success('Cuenta restablecida. Todos los datos fueron eliminados.')
+      playSuccess(owner)
+      toast.success('Datos eliminados. La cuenta quedó como nueva.')
       setWipeOpen(false)
       setWipeText('')
       setTimeout(() => router.push('/dashboard'), 800)
@@ -518,17 +544,41 @@ export default function SettingsPage() {
         {/* Apariencia */}
         <Section icon={<Palette className="h-4 w-4" />} title="Apariencia">
           <div className="space-y-5">
-            <OptionRow<ThemeMode>
-              label="Tema"
-              description="Modo oscuro protege tus ojos de noche."
-              value={themeMode}
-              onChange={handleThemeChange}
-              options={[
-                { value: 'light', label: 'Claro', icon: <Sun className="h-4 w-4" /> },
-                { value: 'dark', label: 'Oscuro', icon: <Moon className="h-4 w-4" /> },
-                { value: 'system', label: 'Sistema', icon: <Monitor className="h-4 w-4" /> },
-              ]}
-            />
+            <div>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-gray-900">Tema</p>
+                {themeMode === 'system' && (
+                  <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-semibold text-purple-700">
+                    Siguiendo tu dispositivo: {resolvedSystemLabel()}
+                  </span>
+                )}
+              </div>
+              <p className="mb-2 text-xs text-gray-500">
+                Modo oscuro protege tus ojos de noche. &quot;Sistema&quot; sigue el ajuste del celular/computador.
+              </p>
+              <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
+                {([
+                  { value: 'light' as ThemeMode, label: 'Claro', icon: <Sun className="h-4 w-4" /> },
+                  { value: 'dark' as ThemeMode, label: 'Oscuro', icon: <Moon className="h-4 w-4" /> },
+                  { value: 'system' as ThemeMode, label: 'Sistema', icon: <Monitor className="h-4 w-4" /> },
+                ]).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => handleThemeChange(opt.value)}
+                    className={cn(
+                      'flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold transition-all',
+                      themeMode === opt.value
+                        ? 'bg-white text-purple-700 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700',
+                    )}
+                  >
+                    {opt.icon}
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <OptionRow<UiFontSize>
               label="Tamaño de letra"
@@ -817,24 +867,22 @@ export default function SettingsPage() {
             {/* Preview */}
             <div>
               <p className="mb-2 text-xs font-semibold text-gray-700">Vista previa de la guía</p>
-              <div className="flex justify-center rounded-xl border border-gray-200 bg-gradient-to-b from-gray-50 to-gray-100 p-3">
-                <div className="scale-110 origin-top">
-                  <GuideCard
-                    sizes={printFontSize === 'custom' ? printCustom : undefined}
-                    fontSize={printFontSize === 'custom' ? undefined : printFontSize}
-                    order={{
-                      order_code: 'TM-0001',
-                      client_name: 'Paola Rodríguez',
-                      phone: '3203880422',
-                      address: 'Calle 123 #45-67',
-                      complement: 'Apto 301 · Bogotá',
-                      product_ref: 'P12',
-                      detail: '2 pares pantuflas · negro · talla 37',
-                      value_to_collect: 85000,
-                      comment: 'Llamar antes de entregar',
-                    }}
-                  />
-                </div>
+              <div className="flex justify-center overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-b from-gray-50 to-gray-100 p-4">
+                <GuideCard
+                  sizes={printFontSize === 'custom' ? printCustom : undefined}
+                  fontSize={printFontSize === 'custom' ? undefined : printFontSize}
+                  order={{
+                    order_code: 'TM-0001',
+                    client_name: 'Paola Rodríguez',
+                    phone: '3203880422',
+                    address: 'Calle 123 #45-67',
+                    complement: 'Apto 301 · Bogotá',
+                    product_ref: 'P12',
+                    detail: '2 pares pantuflas · negro · talla 37',
+                    value_to_collect: 85000,
+                    comment: 'Llamar antes de entregar',
+                  }}
+                />
               </div>
             </div>
 
@@ -920,8 +968,17 @@ export default function SettingsPage() {
           <dl className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <dt className="text-sm text-gray-500">Versión</dt>
-              <dd className="text-sm font-mono font-semibold text-gray-900">
-                {APP_VERSION}
+              <dd>
+                <button
+                  type="button"
+                  onClick={() => setChangelogOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-sm font-mono font-semibold text-purple-700 transition-colors hover:bg-purple-100"
+                  title="Ver qué trajo cada versión"
+                  aria-label="Ver historial de versiones"
+                >
+                  {APP_VERSION}
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
               </dd>
             </div>
             <div className="flex items-center justify-between gap-2">
@@ -929,7 +986,7 @@ export default function SettingsPage() {
               <dd className="text-sm font-semibold text-gray-900">Ronald · Koptup</dd>
             </div>
             <p className="pt-1 text-xs text-gray-400">
-              Cada nuevo cambio entregado sube la versión 0.001.
+              Toca la versión para ver qué mejoró en cada entrega.
             </p>
           </dl>
 
@@ -982,6 +1039,79 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
+
+      {/* Modal: historial de versiones (changelog) */}
+      {changelogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
+          onClick={() => setChangelogOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg max-h-[85vh] overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 border-b border-gray-100 bg-purple-50 px-5 py-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600 text-white">
+                <Info className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold text-gray-900">Historial de versiones</h3>
+                <p className="text-xs text-gray-500">Qué trajo cada entrega de Meraki</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setChangelogOpen(false)}
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-white hover:text-gray-600"
+                aria-label="Cerrar"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
+              <ol className="space-y-5">
+                {CHANGELOG.map((entry, idx) => (
+                  <li key={entry.version} className="relative pl-5">
+                    <span
+                      className={cn(
+                        'absolute left-0 top-1.5 h-2.5 w-2.5 rounded-full border-2',
+                        idx === 0
+                          ? 'border-purple-600 bg-purple-500'
+                          : 'border-gray-300 bg-white',
+                      )}
+                    />
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-mono text-sm font-bold text-gray-900">
+                        v{entry.version}
+                      </span>
+                      {idx === 0 && (
+                        <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-semibold text-purple-700">
+                          Actual
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-400">{entry.date}</span>
+                    </div>
+                    <ul className="mt-1.5 space-y-1">
+                      {entry.highlights.map((h, i) => (
+                        <li
+                          key={i}
+                          className="flex gap-2 text-sm text-gray-700 leading-snug"
+                        >
+                          <span className="text-purple-500 shrink-0">•</span>
+                          <span>{h}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-6 rounded-xl bg-gray-50 px-3 py-2 text-[11px] text-gray-500">
+                Cada entrega sube la versión en 0.001. La lista se actualiza con cada despliegue.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal: confirmar borrado total */}
       {wipeOpen && (
@@ -1037,7 +1167,7 @@ export default function SettingsPage() {
                 {wiping
                   ? <Loader2 className="h-4 w-4 animate-spin" />
                   : <Trash2 className="h-4 w-4" />}
-                Eliminar cuenta
+                Eliminar datos
               </button>
             </div>
           </div>
