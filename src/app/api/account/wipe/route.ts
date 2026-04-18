@@ -1,0 +1,69 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getSession } from '@/lib/auth';
+import { getServiceClient } from '@/lib/supabase';
+
+const CONFIRMATION_PHRASE = 'Acepto';
+
+/**
+ * Vacía todos los datos de negocio de la cuenta (pedidos, inventario,
+ * productos, gastos) dejándola como nueva. Requiere que el usuario
+ * envíe la frase de confirmación exacta "Acepto".
+ *
+ * Conserva:
+ *   - la fila de settings con openai_api_key (la cuenta sigue operativa)
+ *   - la sesión (la persona puede seguir usando la app tras el borrado).
+ */
+export async function POST(request: NextRequest) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+  }
+
+  let body: { confirmation?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Cuerpo inválido' }, { status: 400 });
+  }
+
+  const confirmation = typeof body.confirmation === 'string' ? body.confirmation.trim() : '';
+  if (confirmation !== CONFIRMATION_PHRASE) {
+    return NextResponse.json(
+      { error: `Debes escribir "${CONFIRMATION_PHRASE}" para confirmar` },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const supabase = getServiceClient();
+
+    // Borrar usando una condición siempre verdadera en la PK (id > 0).
+    const tables = ['orders', 'inventory', 'products', 'expenses'] as const;
+    const errors: string[] = [];
+
+    for (const table of tables) {
+      const { error } = await supabase.from(table).delete().gt('id', 0);
+      if (error) errors.push(`${table}: ${error.message}`);
+    }
+
+    if (errors.length > 0) {
+      console.error('Account wipe partial failure:', errors);
+      return NextResponse.json(
+        { error: `Error al borrar algunos datos: ${errors.join('; ')}` },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Cuenta restablecida. Todos los datos fueron eliminados.',
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Error desconocido';
+    console.error('Account wipe error:', message);
+    return NextResponse.json(
+      { error: `Error al restablecer la cuenta: ${message}` },
+      { status: 500 },
+    );
+  }
+}

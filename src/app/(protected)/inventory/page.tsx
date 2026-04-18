@@ -12,6 +12,7 @@ import {
   Edit2,
   Trash2,
   Download,
+  HelpCircle,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
@@ -22,6 +23,8 @@ import { useUser } from '@/lib/UserContext'
 import { isOwnerSupported } from '@/lib/db'
 import PhotoCapture from '@/components/shared/PhotoCapture'
 import ImageLightbox from '@/components/shared/ImageLightbox'
+import PageHelpModal from '@/components/shared/PageHelpModal'
+import { INVENTORY_HELP } from '@/lib/pageHelp'
 
 const CATEGORIES = ['Pantuflas', 'Maxisacos', 'Accesorios', 'Otro']
 const COLORS = ['Negro', 'Blanco', 'Gris', 'Beige', 'Rosado', 'Azul', 'Verde', 'Rojo', 'Morado', 'Multicolor']
@@ -262,6 +265,7 @@ export default function InventoryPage() {
   const owner = useUser()
   const [items, setItems] = useState<InventoryItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [view, setView] = useState<'verified' | 'defective'>('verified')
   const [search, setSearch] = useState('')
   const [filterModel, setFilterModel] = useState('')
@@ -373,6 +377,14 @@ export default function InventoryPage() {
               <p className="text-xs text-gray-500">Tu Tienda Meraki</p>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setHelpOpen(true)}
+                className="flex items-center justify-center rounded-xl border border-gray-200 p-2 text-gray-600 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 transition-colors"
+                title="¿Qué hace esta pantalla?"
+                aria-label="Ayuda de Inventario"
+              >
+                <HelpCircle className="h-4 w-4" />
+              </button>
               <button
                 onClick={async () => {
                   try {
@@ -661,6 +673,8 @@ export default function InventoryPage() {
           )}
         </div>
       </div>
+
+      {helpOpen && <PageHelpModal content={INVENTORY_HELP} onClose={() => setHelpOpen(false)} />}
 
       {/* Modal */}
       {modalOpen && (

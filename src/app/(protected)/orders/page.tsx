@@ -14,12 +14,15 @@ import {
   Banknote,
   TrendingUp,
   X,
+  HelpCircle,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Order } from '@/lib/types'
 import { cn, formatCurrency, getMonthDays } from '@/lib/utils'
 import { useUser } from '@/lib/UserContext'
 import { isOwnerSupported } from '@/lib/db'
+import PageHelpModal from '@/components/shared/PageHelpModal'
+import { ORDERS_HELP } from '@/lib/pageHelp'
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -96,6 +99,7 @@ export default function OrdersPage({
   const [loading, setLoading] = useState(true)
   const [supabaseOk, setSupabaseOk] = useState(true)
   const [kpiFilter, setKpiFilter] = useState<string | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const todayStr = `${now.getFullYear()}-${padDate(now.getMonth() + 1)}-${padDate(now.getDate())}`
 
@@ -229,6 +233,15 @@ export default function OrdersPage({
           </div>
 
           <button
+            onClick={() => setHelpOpen(true)}
+            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-gray-600 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-colors"
+            title="¿Qué hace esta pantalla?"
+            aria-label="Ayuda de Pedidos"
+          >
+            <HelpCircle className="h-4 w-4" />
+          </button>
+
+          <button
             onClick={() => router.push('/orders/new')}
             className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:-translate-y-0.5"
             style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #9061f9 100%)' }}
@@ -238,6 +251,8 @@ export default function OrdersPage({
           </button>
         </div>
       </div>
+
+      {helpOpen && <PageHelpModal content={ORDERS_HELP} onClose={() => setHelpOpen(false)} />}
 
       {!supabaseOk && <SupabaseBanner />}
 

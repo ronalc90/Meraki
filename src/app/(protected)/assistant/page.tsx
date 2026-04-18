@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Mic, MicOff, Send, Sparkles, Check, X, Loader2, Package, ShoppingBag, Search, MapPin, Download, Trash2, ChevronRight, HelpCircle, CheckCircle, RotateCcw, AlertTriangle, DollarSign, Receipt, FileText } from 'lucide-react';
+import { Mic, MicOff, Send, Sparkles, Check, X, Loader2, Package, ShoppingBag, Search, MapPin, Download, Trash2, ChevronRight, HelpCircle, CheckCircle, RotateCcw, AlertTriangle, DollarSign, Receipt, FileText, BookOpen } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/lib/UserContext';
@@ -9,8 +9,16 @@ import { isOwnerSupported } from '@/lib/db';
 import { formatCurrency, generateOrderCode, parseCopAmount } from '@/lib/utils';
 import DispatchGuide from '@/components/dispatch/DispatchGuide';
 import AssistantHelpModal from '@/components/assistant/AssistantHelpModal';
+import WorkdayArchiveModal from '@/components/assistant/WorkdayArchiveModal';
 import ImageLightbox from '@/components/shared/ImageLightbox';
 import { downloadExcel } from '@/lib/export';
+import {
+  saveWorkday,
+  listWorkdays,
+  findWorkdayByQuery,
+  detectArchiveIntent,
+  type Workday,
+} from '@/lib/workdayArchive';
 
 interface SubAction {
   action: string;
@@ -132,6 +140,7 @@ export default function AssistantPage() {
   const [selectedItem, setSelectedItem] = useState<Record<string, unknown> | null>(null);
   const [chatLoaded, setChatLoaded] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
@@ -162,12 +171,69 @@ export default function AssistantPage() {
     toast.success('Chat limpiado');
   };
 
+  const startNewWorkday = () => {
+    if (messages.length === 0) {
+      toast('No hay chat para guardar', { icon: 'ℹ️' });
+      return;
+    }
+    const saved = saveWorkday(messages);
+    setMessages([]);
+    setPendingAction(null);
+    setPreConfirmPhoto(null);
+    setPhotoStepDone(false);
+    localStorage.removeItem('meraki-chat');
+    toast.success(saved ? `Guardado en el librito — ${saved.label}` : 'Chat limpiado');
+  };
+
+  const restoreWorkday = (workday: Workday) => {
+    setMessages(workday.messages);
+    setPendingAction(null);
+    setPreConfirmPhoto(null);
+    setPhotoStepDone(false);
+    setArchiveOpen(false);
+    toast.success(`Chat restaurado — ${workday.label}`);
+    scrollToBottom();
+  };
+
   const scrollToBottom = useCallback(() => {
     setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   }, []);
 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
+
+    // Voice/text shortcut: open the librito or restore a specific archived day
+    // without calling the AI (works offline and is deterministic).
+    const archiveIntent = detectArchiveIntent(text);
+    if (archiveIntent) {
+      const userMsg: ChatMessage = { role: 'user', content: text };
+      setInput('');
+      if (archiveIntent.kind === 'list') {
+        setMessages(prev => [...prev, userMsg, {
+          role: 'assistant',
+          content: listWorkdays().length === 0
+            ? 'Tu librito está vacío por ahora. Cada vez que pulses "Nuevo día" guardo el chat acá.'
+            : 'Acá está tu librito con los días guardados.',
+        }]);
+        setArchiveOpen(true);
+        scrollToBottom();
+        return;
+      }
+      const match = findWorkdayByQuery(archiveIntent.query ?? text);
+      if (match) {
+        setMessages(prev => [...prev, userMsg]);
+        restoreWorkday(match);
+        return;
+      }
+      setMessages(prev => [...prev, userMsg, {
+        role: 'assistant',
+        content: 'No encontré un día guardado que coincida. Abrí el librito para ver la lista.',
+      }]);
+      setArchiveOpen(true);
+      scrollToBottom();
+      return;
+    }
+
     const userMsg: ChatMessage = { role: 'user', content: text };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
@@ -566,8 +632,16 @@ export default function AssistantPage() {
           >
             <HelpCircle className="w-4 h-4" />
           </button>
+          <button
+            onClick={() => setArchiveOpen(true)}
+            className="p-2 rounded-lg hover:bg-amber-50 text-gray-400 hover:text-amber-600 transition"
+            title="Nuevo día de trabajo — guarda el chat en el librito"
+            aria-label="Nuevo día de trabajo / librito"
+          >
+            <BookOpen className="w-4 h-4" />
+          </button>
           {messages.length > 0 && (
-            <button onClick={clearChat} className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition" title="Limpiar chat">
+            <button onClick={clearChat} className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition" title="Limpiar chat (sin guardar)">
               <Trash2 className="w-4 h-4" />
             </button>
           )}
@@ -575,6 +649,18 @@ export default function AssistantPage() {
       </div>
 
       {helpOpen && <AssistantHelpModal onClose={() => setHelpOpen(false)} />}
+
+      {archiveOpen && (
+        <WorkdayArchiveModal
+          hasActiveChat={messages.length > 0}
+          onClose={() => setArchiveOpen(false)}
+          onSaveAndClear={() => {
+            startNewWorkday();
+            setArchiveOpen(false);
+          }}
+          onRestore={restoreWorkday}
+        />
+      )}
 
       {/* Chat area */}
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3 min-h-0">

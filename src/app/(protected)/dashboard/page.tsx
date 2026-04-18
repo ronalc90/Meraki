@@ -13,6 +13,7 @@ import {
   Download,
   PercentCircle,
   Star,
+  HelpCircle,
 } from 'lucide-react'
 import {
   BarChart,
@@ -34,6 +35,8 @@ import { cn, formatCurrency } from '@/lib/utils'
 import { downloadExcel } from '@/lib/export'
 import { useUser } from '@/lib/UserContext'
 import { isOwnerSupported } from '@/lib/db'
+import PageHelpModal from '@/components/shared/PageHelpModal'
+import { DASHBOARD_HELP } from '@/lib/pageHelp'
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -136,6 +139,7 @@ export default function DashboardPage() {
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const loadOrders = useCallback(async (y: number, m: number) => {
     setLoading(true)
@@ -276,26 +280,38 @@ export default function DashboardPage() {
               </button>
             </div>
           </div>
-          {/* Export (own row on mobile, inline on desktop) */}
-          <button
-            onClick={async () => {
-              try {
-                await downloadExcel('dashboard', {
-                  month: String(month),
-                  year: String(year),
-                  owner,
-                })
-              } catch {
-                toast.error('Error al exportar')
-              }
-            }}
-            className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-colors"
-          >
-            <Download className="h-4 w-4" />
-            <span>Exportar</span>
-          </button>
+          {/* Export + help (own row on mobile, inline on desktop) */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setHelpOpen(true)}
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-colors"
+              title="¿Qué hace esta pantalla?"
+              aria-label="Ayuda de Inicio"
+            >
+              <HelpCircle className="h-4 w-4" />
+              <span className="hidden sm:inline">Ayuda</span>
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  await downloadExcel('dashboard', {
+                    month: String(month),
+                    year: String(year),
+                    owner,
+                  })
+                } catch {
+                  toast.error('Error al exportar')
+                }
+              }}
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-colors"
+            >
+              <Download className="h-4 w-4" />
+              <span>Exportar</span>
+            </button>
+          </div>
         </div>
       </div>
+      {helpOpen && <PageHelpModal content={DASHBOARD_HELP} onClose={() => setHelpOpen(false)} />}
 
       <div className="mx-auto max-w-5xl px-4 py-4 space-y-6">
         {loading ? (

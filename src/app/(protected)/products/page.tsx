@@ -1,13 +1,15 @@
 'use client'
 
 import { use, useEffect, useState, useCallback } from 'react'
-import { Plus, Search, Pencil, Trash2, X, Check, AlertTriangle, PackageSearch, Download, Camera } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, X, Check, AlertTriangle, PackageSearch, Download, Camera, HelpCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import type { Product } from '@/lib/types'
 import { cn, formatCurrency, parseCopAmount } from '@/lib/utils'
 import { downloadExcel } from '@/lib/export'
 import ProductPhotoAI from '@/components/products/ProductPhotoAI'
+import PageHelpModal from '@/components/shared/PageHelpModal'
+import { PRODUCTS_HELP } from '@/lib/pageHelp'
 import { useUser } from '@/lib/UserContext'
 import { isOwnerSupported } from '@/lib/db'
 
@@ -139,6 +141,7 @@ export default function ProductsPage({
 
   const [form, setForm] = useState({ ...EMPTY_FORM })
   const [showPhotoAI, setShowPhotoAI] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const fetchProducts = useCallback(async () => {
     setLoading(true)
@@ -289,6 +292,15 @@ export default function ProductsPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setHelpOpen(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700"
+            title="¿Qué hace esta pantalla?"
+            aria-label="Ayuda de Productos"
+          >
+            <HelpCircle className="h-4 w-4" />
+            <span className="hidden sm:inline">Ayuda</span>
+          </button>
           <button
             onClick={async () => {
               try {
@@ -624,6 +636,8 @@ export default function ProductsPage({
           </div>
         </div>
       </Modal>
+
+      {helpOpen && <PageHelpModal content={PRODUCTS_HELP} onClose={() => setHelpOpen(false)} />}
 
       {/* Photo AI Modal */}
       {showPhotoAI && (
