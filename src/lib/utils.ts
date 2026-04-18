@@ -78,3 +78,21 @@ export function getDayOfWeek(date: Date): string {
   const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   return days[date.getDay()];
 }
+
+/**
+ * Devuelve el nombre de la vendedora a persistir en la BD a partir del
+ * identificador de sesión. La sesión guarda el username en minúsculas
+ * (ej. "paola"), pero queremos que la columna `vendor` quede con la
+ * primera letra en mayúscula para que los conteos por vendedora sean
+ * consistentes entre formularios (/orders/new) y el asistente.
+ */
+export function vendorDisplayName(owner: string | null | undefined): string {
+  const raw = (owner ?? '').trim();
+  if (!raw) return 'Paola';
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+}
+
+/** Compara vendedores de forma insensible a mayúsculas/espacios. */
+export function sameVendor(a: string | null | undefined, b: string | null | undefined): boolean {
+  return (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
+}

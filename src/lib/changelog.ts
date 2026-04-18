@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.009',
+    date: '2026-04-17',
+    highlights: [
+      'Pedidos: nuevo toggle Calendario / Lista. La Lista tiene filtros por código, cliente, teléfono, dirección, ciudad, vendedor, tipo de envío, estado, producto, talla y color.',
+      'KPIs del encabezado (Total, Entregados, Devoluciones, Cancelados, Recaudo, Utilidad) se recalculan en vivo según los filtros activos.',
+      'Nuevo Pedido: campos separados para Barrio, Localidad y Sector/Conjunto. Si la ciudad queda vacía, se guarda automáticamente como "Bogotá".',
+      'Nuevo Pedido: el detalle del producto ahora se captura estructurado (Cantidad, Talla, Color, Modelo) + observación libre. Esos campos quedan guardados con formato consistente para poder filtrar la lista por talla o color.',
+      'Fix: cuando Paola creaba pedidos desde el Asistente, se guardaban con vendedor en minúscula y no se contaban en la tarjeta de Vendedora. Ahora el nombre de la vendedora se normaliza y las comparaciones son insensibles a mayúsculas.',
+    ],
+  },
+  {
     version: '1.008',
     date: '2026-04-17',
     highlights: [
