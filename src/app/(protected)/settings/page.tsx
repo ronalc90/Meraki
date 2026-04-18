@@ -33,6 +33,8 @@ import {
   Trash2,
   AlertTriangle,
   HelpCircle,
+  Minus,
+  Plus,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils'
@@ -40,7 +42,11 @@ import { APP_VERSION } from '@/lib/version'
 import {
   getPrintFontSize,
   setPrintFontSize,
+  getPrintCustomSizes,
+  setPrintCustomSizes,
   PRINT_FONT_LABELS,
+  PRINT_SIZE_MIN,
+  PRINT_SIZE_MAX,
   getUiFontSize,
   setUiFontSize,
   UI_FONT_LABELS,
@@ -64,6 +70,7 @@ import {
   setShowPrintLogo,
   clearAllPreferences,
   type PrintFontSize,
+  type PrintSizes,
   type UiFontSize,
   type ThemeMode,
   type UiDensity,
@@ -71,6 +78,7 @@ import {
 } from '@/lib/preferences'
 import { useUser } from '@/lib/UserContext'
 import ExcelImport from '@/components/shared/ExcelImport'
+import { GuideCard } from '@/components/dispatch/DispatchGuide'
 import PageHelpModal from '@/components/shared/PageHelpModal'
 import { SETTINGS_HELP } from '@/lib/pageHelp'
 
@@ -182,6 +190,45 @@ function emitPrefsChanged() {
   }
 }
 
+function PrintSizeStepper({
+  label,
+  value,
+  onDec,
+  onInc,
+}: {
+  label: string
+  value: number
+  onDec: () => void
+  onInc: () => void
+}) {
+  return (
+    <div className="rounded-lg bg-white border border-purple-100 px-2 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+      <div className="mt-1 flex items-center justify-between gap-1">
+        <button
+          type="button"
+          onClick={onDec}
+          aria-label={`Disminuir ${label}`}
+          className="flex h-7 w-7 items-center justify-center rounded-md bg-purple-100 text-purple-700 hover:bg-purple-200"
+        >
+          <Minus className="h-3.5 w-3.5" />
+        </button>
+        <span className="text-sm font-bold text-gray-900 tabular-nums">
+          {value.toFixed(1)}<span className="text-[10px] font-normal text-gray-500">pt</span>
+        </span>
+        <button
+          type="button"
+          onClick={onInc}
+          aria-label={`Aumentar ${label}`}
+          className="flex h-7 w-7 items-center justify-center rounded-md bg-purple-100 text-purple-700 hover:bg-purple-200"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const router = useRouter()
   const owner = useUser()
@@ -206,6 +253,7 @@ export default function SettingsPage() {
 
   /* ─────── Preferencias de impresión ─────── */
   const [printFontSize, setPrintFontSizeState] = useState<PrintFontSize>('medium')
+  const [printCustom, setPrintCustomState] = useState<PrintSizes>({ header: 11, body: 12, bold: 13, footer: 9 })
   const [autoOpenPrint, setAutoOpenPrintState] = useState(false)
   const [showPrintLogo, setShowPrintLogoState] = useState(true)
 
@@ -218,6 +266,7 @@ export default function SettingsPage() {
     setSoundsEnabledState(getSoundsEnabled(owner))
     setConfirmDestructiveState(getConfirmDestructive(owner))
     setPrintFontSizeState(getPrintFontSize(owner))
+    setPrintCustomState(getPrintCustomSizes(owner))
     setAutoOpenPrintState(getAutoOpenPrintDialog(owner))
     setShowPrintLogoState(getShowPrintLogo(owner))
   }, [owner])
@@ -267,6 +316,18 @@ export default function SettingsPage() {
     setPrintFontSizeState(v)
     setPrintFontSize(owner, v)
     toast.success(`Letra de impresión: ${PRINT_FONT_LABELS[v]}`)
+  }
+
+  function adjustPrintCustom(key: keyof PrintSizes, delta: number) {
+    const raw = printCustom[key] + delta
+    const clamped = Math.min(PRINT_SIZE_MAX, Math.max(PRINT_SIZE_MIN, Math.round(raw * 10) / 10))
+    const next: PrintSizes = { ...printCustom, [key]: clamped }
+    setPrintCustomState(next)
+    setPrintCustomSizes(owner, next)
+    if (printFontSize !== 'custom') {
+      setPrintFontSizeState('custom')
+      setPrintFontSize(owner, 'custom')
+    }
   }
 
   function handleAutoOpenPrintChange(v: boolean) {
@@ -704,17 +765,78 @@ export default function SettingsPage() {
         {/* Preferencias de impresión */}
         <Section icon={<Printer className="h-4 w-4" />} title="Preferencias de impresión">
           <div className="space-y-5">
-            <OptionRow<PrintFontSize>
-              label="Tamaño de letra en guía"
-              description="Se aplica al imprimir guías de despacho (papel térmico 58mm)."
-              value={printFontSize}
-              onChange={handlePrintFontChange}
-              options={[
-                { value: 'small', label: PRINT_FONT_LABELS.small },
-                { value: 'medium', label: PRINT_FONT_LABELS.medium },
-                { value: 'large', label: PRINT_FONT_LABELS.large },
-              ]}
-            />
+            <div>
+              <p className="mb-1 text-sm font-medium text-gray-900">Tamaño de letra en guía</p>
+              <p className="mb-2 text-xs text-gray-500">
+                Elige un preajuste o arma tu propio tamaño para que todo quepa en la cinta térmica.
+              </p>
+              <div className="grid grid-cols-4 gap-1 rounded-xl bg-gray-100 p-1">
+                {(['small', 'medium', 'large', 'custom'] as PrintFontSize[]).map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => handlePrintFontChange(size)}
+                    className={cn(
+                      'rounded-lg py-2 text-xs font-semibold transition-all',
+                      printFontSize === size
+                        ? 'bg-white text-purple-700 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700',
+                    )}
+                  >
+                    {PRINT_FONT_LABELS[size]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Ajuste fino — siempre visible, activa modo personalizado al tocarlo */}
+            <div className="rounded-xl border border-purple-100 bg-purple-50/40 p-3">
+              <p className="mb-2 text-xs font-semibold text-purple-900">
+                Ajuste fino (pt) — tocar cualquier control activa el modo Personalizado
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {(['header', 'body', 'bold', 'footer'] as const).map((k) => (
+                  <PrintSizeStepper
+                    key={k}
+                    label={
+                      k === 'header' ? 'Cabecera' :
+                      k === 'body' ? 'Cuerpo' :
+                      k === 'bold' ? 'Destacado' : 'Pie'
+                    }
+                    value={printCustom[k]}
+                    onDec={() => adjustPrintCustom(k, -0.5)}
+                    onInc={() => adjustPrintCustom(k, 0.5)}
+                  />
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-gray-500">
+                Rango permitido: {PRINT_SIZE_MIN}–{PRINT_SIZE_MAX} pt · paso 0.5 pt.
+              </p>
+            </div>
+
+            {/* Preview */}
+            <div>
+              <p className="mb-2 text-xs font-semibold text-gray-700">Vista previa de la guía</p>
+              <div className="flex justify-center rounded-xl border border-gray-200 bg-gradient-to-b from-gray-50 to-gray-100 p-3">
+                <div className="scale-110 origin-top">
+                  <GuideCard
+                    sizes={printFontSize === 'custom' ? printCustom : undefined}
+                    fontSize={printFontSize === 'custom' ? undefined : printFontSize}
+                    order={{
+                      order_code: 'TM-0001',
+                      client_name: 'Paola Rodríguez',
+                      phone: '3203880422',
+                      address: 'Calle 123 #45-67',
+                      complement: 'Apto 301 · Bogotá',
+                      product_ref: 'P12',
+                      detail: '2 pares pantuflas · negro · talla 37',
+                      value_to_collect: 85000,
+                      comment: 'Llamar antes de entregar',
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
 
             <ToggleRow
               label="Abrir diálogo de impresión automáticamente"

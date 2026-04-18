@@ -212,29 +212,33 @@ export default function OrdersPage({
             {MONTH_NAMES[month - 1]} {year}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          {/* Month selector */}
-          <div className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-1 py-1 shadow-sm">
-            <button
-              onClick={prevMonth}
-              className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 transition-colors"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <span className="min-w-[140px] text-center text-sm font-semibold text-gray-700">
-              {MONTH_NAMES[month - 1]} {year}
-            </span>
-            <button
-              onClick={nextMonth}
-              className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 transition-colors"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
 
+        {/* Month selector: fila completa en móvil */}
+        <div className="flex items-center justify-center gap-1 rounded-xl border border-gray-200 bg-white px-1 py-1 shadow-sm sm:order-2">
+          <button
+            onClick={prevMonth}
+            className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 transition-colors"
+            aria-label="Mes anterior"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <span className="min-w-0 flex-1 text-center text-sm font-semibold text-gray-700 sm:min-w-[140px]">
+            {MONTH_NAMES[month - 1]} {year}
+          </span>
+          <button
+            onClick={nextMonth}
+            className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 transition-colors"
+            aria-label="Mes siguiente"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Acciones: ayuda + nuevo pedido. Fila aparte en móvil, inline en sm+ */}
+        <div className="flex items-center gap-2 sm:order-3">
           <button
             onClick={() => setHelpOpen(true)}
-            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-gray-600 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-colors"
+            className="inline-flex shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-gray-600 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 transition-colors"
             title="¿Qué hace esta pantalla?"
             aria-label="Ayuda de Pedidos"
           >
@@ -243,7 +247,7 @@ export default function OrdersPage({
 
           <button
             onClick={() => router.push('/orders/new')}
-            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:-translate-y-0.5"
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 sm:flex-none"
             style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #9061f9 100%)' }}
           >
             <Plus className="h-4 w-4" />
