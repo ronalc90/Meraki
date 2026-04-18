@@ -38,12 +38,21 @@ html[data-theme="dark"] body {
 /* Tailwind-neutral escalas de fuente controladas por la preferencia. */
 html { font-size: calc(16px * var(--ui-font-scale, 1)); }
 
-/* Densidad compacta: reduce padding de secciones clave. */
-html[data-density="compact"] .kpi-card,
-html[data-density="compact"] .rounded-2xl {
-  padding-top: 0.25rem;
-  padding-bottom: 0.25rem;
-}
+/* Densidad compacta: reduce espacios y paddings visibles. Usa !important
+ * porque las utilidades Tailwind definen padding/gap con mayor prioridad
+ * en la cascada (se cargan después). */
+html[data-density="compact"] .p-5   { padding: 0.75rem !important; }
+html[data-density="compact"] .p-4   { padding: 0.625rem !important; }
+html[data-density="compact"] .px-5  { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+html[data-density="compact"] .py-4  { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+html[data-density="compact"] .py-3  { padding-top: 0.375rem !important; padding-bottom: 0.375rem !important; }
+html[data-density="compact"] .py-2  { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
+html[data-density="compact"] .space-y-6 > * + * { margin-top: 0.75rem !important; }
+html[data-density="compact"] .space-y-5 > * + * { margin-top: 0.625rem !important; }
+html[data-density="compact"] .space-y-4 > * + * { margin-top: 0.5rem !important; }
+html[data-density="compact"] .space-y-3 > * + * { margin-top: 0.375rem !important; }
+html[data-density="compact"] .gap-4 { gap: 0.5rem !important; }
+html[data-density="compact"] .gap-3 { gap: 0.375rem !important; }
 
 /* Accesibilidad: reducir animaciones por preferencia del usuario. */
 html[data-reduce-motion="1"] *,

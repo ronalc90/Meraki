@@ -79,6 +79,7 @@ import {
 import { useUser } from '@/lib/UserContext'
 import ExcelImport from '@/components/shared/ExcelImport'
 import { GuideCard } from '@/components/dispatch/DispatchGuide'
+import { playSuccess, playTick, playError } from '@/lib/sound'
 import PageHelpModal from '@/components/shared/PageHelpModal'
 import { SETTINGS_HELP } from '@/lib/pageHelp'
 
@@ -190,6 +191,11 @@ function emitPrefsChanged() {
   }
 }
 
+function resolvedSystemLabel(): 'Claro' | 'Oscuro' {
+  if (typeof window === 'undefined') return 'Claro'
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'Oscuro' : 'Claro'
+}
+
 function PrintSizeStepper({
   label,
   value,
@@ -275,13 +281,15 @@ export default function SettingsPage() {
     setThemeModeState(v)
     setThemeMode(owner, v)
     emitPrefsChanged()
-    toast.success(`Tema: ${THEME_LABELS[v]}`)
+    playSuccess(owner)
+    toast.success(`Tema: ${THEME_LABELS[v]}${v === 'system' ? ` (${resolvedSystemLabel()})` : ''}`)
   }
 
   function handleUiFontChange(v: UiFontSize) {
     setUiFontSizeState(v)
     setUiFontSize(owner, v)
     emitPrefsChanged()
+    playSuccess(owner)
     toast.success(`Tamaño: ${UI_FONT_LABELS[v]}`)
   }
 
@@ -289,32 +297,44 @@ export default function SettingsPage() {
     setUiDensityState(v)
     setUiDensity(owner, v)
     emitPrefsChanged()
+    playTick(owner)
   }
 
   function handleReduceMotionChange(v: boolean) {
     setReduceMotionState(v)
     setReduceMotion(owner, v)
     emitPrefsChanged()
+    playTick(owner)
   }
 
   function handleCurrencyChange(v: CurrencyFormat) {
     setCurrencyFormatState(v)
     setCurrencyFormat(owner, v)
+    playTick(owner)
   }
 
   function handleSoundsChange(v: boolean) {
     setSoundsEnabledState(v)
     setSoundsEnabled(owner, v)
+    // Sonar solo al activar, para que el usuario escuche la diferencia.
+    if (v) {
+      setTimeout(() => playSuccess(owner), 60)
+      toast.success('Sonidos activados')
+    } else {
+      toast('Sonidos apagados', { icon: '🔇' })
+    }
   }
 
   function handleConfirmDestructiveChange(v: boolean) {
     setConfirmDestructiveState(v)
     setConfirmDestructive(owner, v)
+    playTick(owner)
   }
 
   function handlePrintFontChange(v: PrintFontSize) {
     setPrintFontSizeState(v)
     setPrintFontSize(owner, v)
+    playTick(owner)
     toast.success(`Letra de impresión: ${PRINT_FONT_LABELS[v]}`)
   }
 
@@ -447,6 +467,7 @@ export default function SettingsPage() {
 
   async function handleWipeAccount() {
     if (wipeText.trim() !== 'Acepto') {
+      playError(owner)
       toast.error('Debes escribir exactamente "Acepto" para confirmar')
       return
     }
@@ -463,7 +484,8 @@ export default function SettingsPage() {
       clearAllPreferences(owner)
       emitPrefsChanged()
 
-      toast.success('Cuenta restablecida. Todos los datos fueron eliminados.')
+      playSuccess(owner)
+      toast.success('Datos eliminados. La cuenta quedó como nueva.')
       setWipeOpen(false)
       setWipeText('')
       setTimeout(() => router.push('/dashboard'), 800)
@@ -518,17 +540,41 @@ export default function SettingsPage() {
         {/* Apariencia */}
         <Section icon={<Palette className="h-4 w-4" />} title="Apariencia">
           <div className="space-y-5">
-            <OptionRow<ThemeMode>
-              label="Tema"
-              description="Modo oscuro protege tus ojos de noche."
-              value={themeMode}
-              onChange={handleThemeChange}
-              options={[
-                { value: 'light', label: 'Claro', icon: <Sun className="h-4 w-4" /> },
-                { value: 'dark', label: 'Oscuro', icon: <Moon className="h-4 w-4" /> },
-                { value: 'system', label: 'Sistema', icon: <Monitor className="h-4 w-4" /> },
-              ]}
-            />
+            <div>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-gray-900">Tema</p>
+                {themeMode === 'system' && (
+                  <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-semibold text-purple-700">
+                    Siguiendo tu dispositivo: {resolvedSystemLabel()}
+                  </span>
+                )}
+              </div>
+              <p className="mb-2 text-xs text-gray-500">
+                Modo oscuro protege tus ojos de noche. &quot;Sistema&quot; sigue el ajuste del celular/computador.
+              </p>
+              <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
+                {([
+                  { value: 'light' as ThemeMode, label: 'Claro', icon: <Sun className="h-4 w-4" /> },
+                  { value: 'dark' as ThemeMode, label: 'Oscuro', icon: <Moon className="h-4 w-4" /> },
+                  { value: 'system' as ThemeMode, label: 'Sistema', icon: <Monitor className="h-4 w-4" /> },
+                ]).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => handleThemeChange(opt.value)}
+                    className={cn(
+                      'flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold transition-all',
+                      themeMode === opt.value
+                        ? 'bg-white text-purple-700 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700',
+                    )}
+                  >
+                    {opt.icon}
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <OptionRow<UiFontSize>
               label="Tamaño de letra"
@@ -817,24 +863,22 @@ export default function SettingsPage() {
             {/* Preview */}
             <div>
               <p className="mb-2 text-xs font-semibold text-gray-700">Vista previa de la guía</p>
-              <div className="flex justify-center rounded-xl border border-gray-200 bg-gradient-to-b from-gray-50 to-gray-100 p-3">
-                <div className="scale-110 origin-top">
-                  <GuideCard
-                    sizes={printFontSize === 'custom' ? printCustom : undefined}
-                    fontSize={printFontSize === 'custom' ? undefined : printFontSize}
-                    order={{
-                      order_code: 'TM-0001',
-                      client_name: 'Paola Rodríguez',
-                      phone: '3203880422',
-                      address: 'Calle 123 #45-67',
-                      complement: 'Apto 301 · Bogotá',
-                      product_ref: 'P12',
-                      detail: '2 pares pantuflas · negro · talla 37',
-                      value_to_collect: 85000,
-                      comment: 'Llamar antes de entregar',
-                    }}
-                  />
-                </div>
+              <div className="flex justify-center overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-b from-gray-50 to-gray-100 p-4">
+                <GuideCard
+                  sizes={printFontSize === 'custom' ? printCustom : undefined}
+                  fontSize={printFontSize === 'custom' ? undefined : printFontSize}
+                  order={{
+                    order_code: 'TM-0001',
+                    client_name: 'Paola Rodríguez',
+                    phone: '3203880422',
+                    address: 'Calle 123 #45-67',
+                    complement: 'Apto 301 · Bogotá',
+                    product_ref: 'P12',
+                    detail: '2 pares pantuflas · negro · talla 37',
+                    value_to_collect: 85000,
+                    comment: 'Llamar antes de entregar',
+                  }}
+                />
               </div>
             </div>
 
@@ -1037,7 +1081,7 @@ export default function SettingsPage() {
                 {wiping
                   ? <Loader2 className="h-4 w-4 animate-spin" />
                   : <Trash2 className="h-4 w-4" />}
-                Eliminar cuenta
+                Eliminar datos
               </button>
             </div>
           </div>

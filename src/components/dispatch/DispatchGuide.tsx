@@ -232,9 +232,9 @@ export function GuideCard({
       </div>
 
       {/* Footer */}
-      <div className="border-t-2 border-black py-1 text-center guide-card-footer">
-        <p className="font-semibold text-gray-700 leading-tight" style={{ fontSize: `${resolved.footer}pt` }}>Mayor Información</p>
-        <p className="font-bold text-gray-900" style={{ fontSize: `${resolved.footer}pt` }}>3203880422.</p>
+      <div className="border-t-2 border-black px-2 py-1 text-center guide-card-footer">
+        <p className="font-semibold text-gray-700 leading-tight" style={{ fontSize: `${resolved.footer}pt`, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>Mayor Información</p>
+        <p className="font-bold text-gray-900 leading-tight" style={{ fontSize: `${resolved.footer}pt`, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>3203880422.</p>
       </div>
     </div>
   );
