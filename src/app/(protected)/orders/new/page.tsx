@@ -6,7 +6,7 @@ import { Bot, ClipboardList, AlertTriangle, Package } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import type { Product, ParsedOrder } from '@/lib/types'
-import { generateOrderCode } from '@/lib/utils'
+import { generateOrderCode, vendorDisplayName } from '@/lib/utils'
 import AIOrderInput from '@/components/orders/AIOrderInput'
 import AIInventoryInput from '@/components/inventory/AIInventoryInput'
 import DispatchGuide from '@/components/dispatch/DispatchGuide'
@@ -22,8 +22,15 @@ interface OrderForm {
   phone: string
   city: string
   address: string
+  neighborhood: string
+  locality: string
+  sector: string
   complement: string
   product_ref: string
+  detail_quantity: string
+  detail_size: string
+  detail_color: string
+  detail_model: string
   detail: string
   comment: string
   value_to_collect: string
@@ -42,8 +49,15 @@ const EMPTY_FORM: OrderForm = {
   phone: '',
   city: '',
   address: '',
+  neighborhood: '',
+  locality: '',
+  sector: '',
   complement: '',
   product_ref: '',
+  detail_quantity: '',
+  detail_size: '',
+  detail_color: '',
+  detail_model: '',
   detail: '',
   comment: '',
   value_to_collect: '',
@@ -55,6 +69,47 @@ const EMPTY_FORM: OrderForm = {
   delivery_status: 'Confirmado',
   order_date: '',
   is_exchange: false,
+}
+
+const DEFAULT_CITY = 'Bogotá'
+
+/**
+ * Compone las piezas opcionales de ubicación (barrio/localidad/sector)
+ * dentro del campo `complement` para que queden visibles en la guía
+ * y en la lista, sin necesidad de migrar la BD.
+ */
+function composeComplement(form: OrderForm): string {
+  const parts: string[] = []
+  const add = (label: string, value: string) => {
+    const v = value.trim()
+    if (v) parts.push(`${label}: ${v}`)
+  }
+  add('Barrio', form.neighborhood)
+  add('Localidad', form.locality)
+  add('Sector', form.sector)
+  const existing = form.complement.trim()
+  if (existing) parts.push(existing)
+  return parts.join(' · ')
+}
+
+/**
+ * Compone el detalle estructurado (cantidad, talla, color, modelo) junto
+ * con el texto libre. Formato estable con prefijos "Etiqueta: valor"
+ * separados por " · " para poder filtrar luego por substring.
+ */
+function composeDetail(form: OrderForm): string {
+  const parts: string[] = []
+  const add = (label: string, value: string) => {
+    const v = value.trim()
+    if (v) parts.push(`${label}: ${v}`)
+  }
+  add('Cantidad', form.detail_quantity)
+  add('Talla', form.detail_size)
+  add('Color', form.detail_color)
+  add('Modelo', form.detail_model)
+  const free = form.detail.trim()
+  if (free) parts.push(free)
+  return parts.join(' · ')
 }
 
 function todayString() {
@@ -190,11 +245,11 @@ export default function NewOrderPage({
         order_code,
         client_name: form.client_name.trim(),
         phone: form.phone.trim(),
-        city: form.city.trim(),
+        city: form.city.trim() || DEFAULT_CITY,
         address: form.address.trim(),
-        complement: form.complement.trim(),
+        complement: composeComplement(form),
         product_ref: form.product_ref.trim(),
-        detail: form.detail.trim(),
+        detail: composeDetail(form),
         comment: form.comment.trim(),
         value_to_collect: parseFloat(form.value_to_collect) || 0,
         payment_cash_bogo: parseFloat(form.payment_cash_bogo) || 0,
@@ -202,7 +257,7 @@ export default function NewOrderPage({
         payment_transfer: parseFloat(form.payment_transfer) || 0,
         product_cost,
         delivery_type: form.delivery_type || '',
-        vendor: 'Paola',
+        vendor: vendorDisplayName(owner),
         delivery_status: form.delivery_status,
         is_exchange: form.is_exchange,
         order_date: form.order_date,
@@ -440,7 +495,7 @@ export default function NewOrderPage({
                 <input
                   type="text"
                   className={inputCls}
-                  placeholder="Bogotá"
+                  placeholder="Bogotá (por defecto)"
                   value={form.city}
                   onChange={(e) => setField('city', e.target.value)}
                   disabled={saving}
@@ -456,7 +511,37 @@ export default function NewOrderPage({
                   disabled={saving}
                 />
               </Field>
-              <Field label="Complemento" >
+              <Field label="Barrio">
+                <input
+                  type="text"
+                  className={inputCls}
+                  placeholder="Chapinero Alto"
+                  value={form.neighborhood}
+                  onChange={(e) => setField('neighborhood', e.target.value)}
+                  disabled={saving}
+                />
+              </Field>
+              <Field label="Localidad">
+                <input
+                  type="text"
+                  className={inputCls}
+                  placeholder="Usaquén"
+                  value={form.locality}
+                  onChange={(e) => setField('locality', e.target.value)}
+                  disabled={saving}
+                />
+              </Field>
+              <Field label="Sector / Conjunto">
+                <input
+                  type="text"
+                  className={inputCls}
+                  placeholder="Conjunto Las Aguas"
+                  value={form.sector}
+                  onChange={(e) => setField('sector', e.target.value)}
+                  disabled={saving}
+                />
+              </Field>
+              <Field label="Complemento">
                 <input
                   type="text"
                   className={inputCls}
@@ -467,6 +552,9 @@ export default function NewOrderPage({
                 />
               </Field>
             </div>
+            <p className="text-[11px] text-gray-400">
+              Si dejas vacía la ciudad, se guardará como <b>Bogotá</b>.
+            </p>
           </div>
 
           {/* Section: Producto */}
@@ -501,27 +589,76 @@ export default function NewOrderPage({
                   />
                 )}
               </Field>
-              <Field label="Detalle del Pedido">
+              <Field label="Cantidad">
                 <input
-                  type="text"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
                   className={inputCls}
-                  placeholder="Pantufla talla M - Rosada x2"
-                  value={form.detail}
-                  onChange={(e) => setField('detail', e.target.value)}
+                  placeholder="1"
+                  value={form.detail_quantity}
+                  onChange={(e) => setField('detail_quantity', e.target.value)}
                   disabled={saving}
                 />
               </Field>
-              <Field label="Comentario">
+              <Field label="Talla">
                 <input
                   type="text"
                   className={inputCls}
-                  placeholder="Nota especial, referencia alternativa..."
-                  value={form.comment}
-                  onChange={(e) => setField('comment', e.target.value)}
+                  placeholder="37, M, XL..."
+                  value={form.detail_size}
+                  onChange={(e) => setField('detail_size', e.target.value)}
                   disabled={saving}
                 />
               </Field>
+              <Field label="Color">
+                <input
+                  type="text"
+                  className={inputCls}
+                  placeholder="Negro, Rosado..."
+                  value={form.detail_color}
+                  onChange={(e) => setField('detail_color', e.target.value)}
+                  disabled={saving}
+                />
+              </Field>
+              <Field label="Modelo / Variante">
+                <input
+                  type="text"
+                  className={inputCls}
+                  placeholder="Modelo Estrella"
+                  value={form.detail_model}
+                  onChange={(e) => setField('detail_model', e.target.value)}
+                  disabled={saving}
+                />
+              </Field>
+              <div className="sm:col-span-2">
+                <Field label="Observación extra (opcional)">
+                  <input
+                    type="text"
+                    className={inputCls}
+                    placeholder="Regalo para una amiga, envolver..."
+                    value={form.detail}
+                    onChange={(e) => setField('detail', e.target.value)}
+                    disabled={saving}
+                  />
+                </Field>
+              </div>
+              <div className="sm:col-span-2">
+                <Field label="Comentario">
+                  <input
+                    type="text"
+                    className={inputCls}
+                    placeholder="Nota especial, referencia alternativa..."
+                    value={form.comment}
+                    onChange={(e) => setField('comment', e.target.value)}
+                    disabled={saving}
+                  />
+                </Field>
+              </div>
             </div>
+            <p className="text-[11px] text-gray-400">
+              Los campos estructurados se guardan junto al detalle como &quot;Talla: 37 · Color: Negro · ...&quot; para que luego puedas filtrar la lista de pedidos por talla o color.
+            </p>
           </div>
 
           {/* Section: Valores */}

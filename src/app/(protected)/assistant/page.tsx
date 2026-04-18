@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/lib/UserContext';
 import { isOwnerSupported } from '@/lib/db';
-import { formatCurrency, generateOrderCode, parseCopAmount } from '@/lib/utils';
+import { formatCurrency, generateOrderCode, parseCopAmount, vendorDisplayName } from '@/lib/utils';
 import DispatchGuide from '@/components/dispatch/DispatchGuide';
 import AssistantHelpModal from '@/components/assistant/AssistantHelpModal';
 import WorkdayArchiveModal from '@/components/assistant/WorkdayArchiveModal';
@@ -325,7 +325,7 @@ export default function AssistantPage() {
         order_code: orderCode, client_name: orderData.client_name || '', phone: String(orderData.phone || ''),
         city: String(orderData.city || 'Bogotá'), address: String(orderData.address || ''), complement: String(orderData.complement || ''),
         product_ref: String(orderData.product_ref || ''), detail: String(orderData.detail || ''), comment: String(orderData.comment || ''),
-        value_to_collect: Number(orderData.value_to_collect) || 0, delivery_status: 'Confirmado', vendor: owner, order_date: dateStr,
+        value_to_collect: Number(orderData.value_to_collect) || 0, delivery_status: 'Confirmado', vendor: vendorDisplayName(owner), order_date: dateStr,
         payment_cash_bogo: 0, payment_cash: 0, payment_transfer: 0, product_cost: 0, operating_cost: 0, prepaid_amount: 0, is_exchange: false,
         status_complement: '',
       };

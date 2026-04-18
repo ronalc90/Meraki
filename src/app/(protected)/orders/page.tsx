@@ -15,6 +15,10 @@ import {
   TrendingUp,
   X,
   HelpCircle,
+  CalendarDays,
+  List,
+  Search as SearchIcon,
+  Filter as FilterIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Order } from '@/lib/types'
@@ -101,6 +105,40 @@ export default function OrdersPage({
   const [kpiFilter, setKpiFilter] = useState<string | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
 
+  // Vista Calendario / Lista (se recuerda en localStorage)
+  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar')
+  useEffect(() => {
+    const stored = typeof window !== 'undefined'
+      ? window.localStorage.getItem('meraki.orders.viewMode')
+      : null
+    if (stored === 'list' || stored === 'calendar') setViewMode(stored)
+  }, [])
+  function changeViewMode(v: 'calendar' | 'list') {
+    setViewMode(v)
+    try { window.localStorage.setItem('meraki.orders.viewMode', v) } catch { /* ignore */ }
+  }
+
+  // Filtros de la vista lista (KPIs se recalculan en vivo con estos)
+  const [searchText, setSearchText] = useState('')
+  const [filterStatus, setFilterStatus] = useState<string>('')
+  const [filterVendor, setFilterVendor] = useState<string>('')
+  const [filterDeliveryType, setFilterDeliveryType] = useState<string>('')
+  const [filterCity, setFilterCity] = useState<string>('')
+  const [filterProduct, setFilterProduct] = useState<string>('')
+  const [filterSize, setFilterSize] = useState<string>('')
+  const [filterColor, setFilterColor] = useState<string>('')
+
+  function clearAllFilters() {
+    setSearchText('')
+    setFilterStatus('')
+    setFilterVendor('')
+    setFilterDeliveryType('')
+    setFilterCity('')
+    setFilterProduct('')
+    setFilterSize('')
+    setFilterColor('')
+  }
+
   const todayStr = `${now.getFullYear()}-${padDate(now.getMonth() + 1)}-${padDate(now.getDate())}`
 
   const fetchOrders = useCallback(async () => {
@@ -157,18 +195,71 @@ export default function OrdersPage({
     return acc
   }, {})
 
-  // KPI summary
-  const totalOrders = orders.length
-  const delivered = orders.filter((o) => o.delivery_status === 'Entregado' || o.delivery_status === 'Pagado').length
-  const returns = orders.filter((o) => o.delivery_status === 'Devolucion').length
-  const cancelled = orders.filter((o) => o.delivery_status === 'Cancelado').length
-  const bogoDebt = orders
-    .filter((o) => o.delivery_status === 'Entregado')
-    .reduce((sum, o) => sum + (o.value_to_collect ?? 0), 0)
-  const totalRevenue = orders
+  // Extrae el valor estructurado "Etiqueta: valor" del campo detail.
+  function pickDetailField(detail: string | null | undefined, label: string): string {
+    if (!detail) return ''
+    const re = new RegExp(`${label}:\\s*([^·]+)`, 'i')
+    const m = detail.match(re)
+    return m ? m[1].trim() : ''
+  }
+
+  // Opciones únicas para los selects del modo lista
+  const uniqueVendors = Array.from(new Set(orders.map((o) => o.vendor).filter(Boolean))).sort()
+  const uniqueCities = Array.from(new Set(orders.map((o) => o.city).filter(Boolean))).sort()
+  const uniqueProducts = Array.from(new Set(orders.map((o) => o.product_ref).filter(Boolean))).sort()
+  const uniqueSizes = Array.from(new Set(
+    orders.map((o) => pickDetailField(o.detail, 'Talla')).filter(Boolean),
+  )).sort()
+  const uniqueColors = Array.from(new Set(
+    orders.map((o) => pickDetailField(o.detail, 'Color')).filter(Boolean),
+  )).sort()
+
+  // En modo Lista aplicamos todos los filtros; en Calendario solo el del mes.
+  const hasActiveFilters = Boolean(
+    searchText || filterStatus || filterVendor || filterDeliveryType
+    || filterCity || filterProduct || filterSize || filterColor,
+  )
+
+  const filteredOrders = viewMode === 'list'
+    ? orders.filter((o) => {
+        if (filterStatus && o.delivery_status !== filterStatus) return false
+        if (filterVendor && o.vendor !== filterVendor) return false
+        if (filterDeliveryType && o.delivery_type !== filterDeliveryType) return false
+        if (filterCity && o.city !== filterCity) return false
+        if (filterProduct && o.product_ref !== filterProduct) return false
+        if (filterSize && pickDetailField(o.detail, 'Talla').toLowerCase() !== filterSize.toLowerCase()) return false
+        if (filterColor && pickDetailField(o.detail, 'Color').toLowerCase() !== filterColor.toLowerCase()) return false
+        if (searchText.trim()) {
+          const q = searchText.trim().toLowerCase()
+          const haystack = [
+            o.order_code,
+            o.client_name,
+            o.phone,
+            o.city,
+            o.address,
+            o.complement,
+            o.product_ref,
+            o.detail,
+            o.comment,
+            o.vendor,
+            o.delivery_status,
+          ].join(' ').toLowerCase()
+          if (!haystack.includes(q)) return false
+        }
+        return true
+      })
+    : orders
+
+  // KPI summary — usa filteredOrders para que reaccione a los filtros del listado.
+  const kpiSource = filteredOrders
+  const totalOrders = kpiSource.length
+  const delivered = kpiSource.filter((o) => o.delivery_status === 'Entregado' || o.delivery_status === 'Pagado').length
+  const returns = kpiSource.filter((o) => o.delivery_status === 'Devolucion').length
+  const cancelled = kpiSource.filter((o) => o.delivery_status === 'Cancelado').length
+  const totalRevenue = kpiSource
     .filter((o) => ['Entregado', 'Pagado'].includes(o.delivery_status))
     .reduce((sum, o) => sum + (o.value_to_collect ?? 0), 0)
-  const totalCosts = orders.reduce((sum, o) => sum + (o.product_cost ?? 0), 0)
+  const totalCosts = kpiSource.reduce((sum, o) => sum + (o.product_cost ?? 0), 0)
   const profit = totalRevenue - totalCosts
 
   // Filtered orders for KPI detail modal
@@ -211,6 +302,34 @@ export default function OrdersPage({
           <p className="mt-0.5 text-sm text-gray-500">
             {MONTH_NAMES[month - 1]} {year}
           </p>
+        </div>
+
+        {/* Toggle de vista: Calendario / Lista */}
+        <div className="flex items-center gap-1 rounded-xl bg-gray-100 p-1 sm:order-2">
+          <button
+            type="button"
+            onClick={() => changeViewMode('calendar')}
+            className={cn(
+              'flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all sm:flex-none',
+              viewMode === 'calendar' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500 hover:text-gray-700',
+            )}
+            aria-pressed={viewMode === 'calendar'}
+          >
+            <CalendarDays className="h-3.5 w-3.5" />
+            Calendario
+          </button>
+          <button
+            type="button"
+            onClick={() => changeViewMode('list')}
+            className={cn(
+              'flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all sm:flex-none',
+              viewMode === 'list' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500 hover:text-gray-700',
+            )}
+            aria-pressed={viewMode === 'list'}
+          >
+            <List className="h-3.5 w-3.5" />
+            Lista
+          </button>
         </div>
 
         {/* Month selector: fila completa en móvil */}
@@ -372,15 +491,63 @@ export default function OrdersPage({
         </div>
       )}
 
+      {/* Banner: indicador de filtros activos + KPIs reactivos en modo lista */}
+      {viewMode === 'list' && hasActiveFilters && (
+        <div className="flex items-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-3 py-2 text-sm">
+          <FilterIcon className="h-4 w-4 text-purple-600" />
+          <span className="text-purple-900">
+            Viendo <b>{filteredOrders.length}</b> de {orders.length} pedidos.
+            Los totales de arriba reflejan tu filtro.
+          </span>
+          <button
+            type="button"
+            onClick={clearAllFilters}
+            className="ml-auto rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-purple-700 border border-purple-200 hover:bg-purple-100"
+          >
+            Quitar filtros
+          </button>
+        </div>
+      )}
+
+      {/* Vista: Lista */}
+      {viewMode === 'list' && !loading && (
+        <OrdersList
+          orders={filteredOrders}
+          allOrders={orders}
+          uniqueVendors={uniqueVendors}
+          uniqueCities={uniqueCities}
+          uniqueProducts={uniqueProducts}
+          uniqueSizes={uniqueSizes}
+          uniqueColors={uniqueColors}
+          searchText={searchText}
+          setSearchText={setSearchText}
+          filterStatus={filterStatus}
+          setFilterStatus={setFilterStatus}
+          filterVendor={filterVendor}
+          setFilterVendor={setFilterVendor}
+          filterDeliveryType={filterDeliveryType}
+          setFilterDeliveryType={setFilterDeliveryType}
+          filterCity={filterCity}
+          setFilterCity={setFilterCity}
+          filterProduct={filterProduct}
+          setFilterProduct={setFilterProduct}
+          filterSize={filterSize}
+          setFilterSize={setFilterSize}
+          filterColor={filterColor}
+          setFilterColor={setFilterColor}
+          onRowClick={(o) => router.push(`/orders/daily/${o.order_date}`)}
+        />
+      )}
+
       {/* Calendar grid */}
-      {loading ? (
+      {viewMode === 'calendar' && loading ? (
         <div className="flex h-48 items-center justify-center">
           <div
             className="h-8 w-8 animate-spin rounded-full border-2"
             style={{ borderColor: '#7c3aed', borderTopColor: 'transparent' }}
           />
         </div>
-      ) : (
+      ) : viewMode === 'calendar' ? (
         <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
           {/* Day headers */}
           <div className="grid grid-cols-7 border-b border-gray-100">
@@ -455,6 +622,267 @@ export default function OrdersPage({
             })}
           </div>
         </div>
+      ) : null}
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * OrdersList — vista lista con filtros por columna (cliente, ciudad,
+ * producto, estado, vendedor, tipo de entrega).
+ * ───────────────────────────────────────────────────────────────────── */
+
+const STATUS_OPTIONS: Order['delivery_status'][] = [
+  'Confirmado', 'Enviado', 'Entregado', 'Pagado', 'Devolucion', 'Cancelado',
+]
+const DELIVERY_TYPES: Order['delivery_type'][] = ['Bogo', 'Bodega', 'Otros']
+
+function statusTone(s: Order['delivery_status']): string {
+  if (s === 'Entregado' || s === 'Pagado') return 'bg-emerald-100 text-emerald-700'
+  if (s === 'Confirmado') return 'bg-blue-100 text-blue-700'
+  if (s === 'Enviado') return 'bg-sky-100 text-sky-700'
+  if (s === 'Devolucion') return 'bg-amber-100 text-amber-700'
+  return 'bg-red-100 text-red-700'
+}
+
+interface OrdersListProps {
+  orders: Order[]
+  allOrders: Order[]
+  uniqueVendors: string[]
+  uniqueCities: string[]
+  uniqueProducts: string[]
+  uniqueSizes: string[]
+  uniqueColors: string[]
+  searchText: string
+  setSearchText: (v: string) => void
+  filterStatus: string
+  setFilterStatus: (v: string) => void
+  filterVendor: string
+  setFilterVendor: (v: string) => void
+  filterDeliveryType: string
+  setFilterDeliveryType: (v: string) => void
+  filterCity: string
+  setFilterCity: (v: string) => void
+  filterProduct: string
+  setFilterProduct: (v: string) => void
+  filterSize: string
+  setFilterSize: (v: string) => void
+  filterColor: string
+  setFilterColor: (v: string) => void
+  onRowClick: (order: Order) => void
+}
+
+function OrdersList({
+  orders,
+  allOrders,
+  uniqueVendors,
+  uniqueCities,
+  uniqueProducts,
+  uniqueSizes,
+  uniqueColors,
+  searchText,
+  setSearchText,
+  filterStatus,
+  setFilterStatus,
+  filterVendor,
+  setFilterVendor,
+  filterDeliveryType,
+  setFilterDeliveryType,
+  filterCity,
+  setFilterCity,
+  filterProduct,
+  setFilterProduct,
+  filterSize,
+  setFilterSize,
+  filterColor,
+  setFilterColor,
+  onRowClick,
+}: OrdersListProps) {
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+      {/* Barra de búsqueda + filtros */}
+      <div className="border-b border-gray-100 bg-gray-50 px-3 py-3">
+        <div className="relative mb-2">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder="Buscar por código, cliente, teléfono, dirección, detalle…"
+            className="w-full rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300"
+          >
+            <option value="">Estado (todos)</option>
+            {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select
+            value={filterVendor}
+            onChange={(e) => setFilterVendor(e.target.value)}
+            className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300"
+          >
+            <option value="">Vendedor (todos)</option>
+            {uniqueVendors.map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+          <select
+            value={filterDeliveryType}
+            onChange={(e) => setFilterDeliveryType(e.target.value)}
+            className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300"
+          >
+            <option value="">Tipo envío</option>
+            {DELIVERY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select
+            value={filterCity}
+            onChange={(e) => setFilterCity(e.target.value)}
+            className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300"
+          >
+            <option value="">Ciudad (todas)</option>
+            {uniqueCities.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select
+            value={filterProduct}
+            onChange={(e) => setFilterProduct(e.target.value)}
+            className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300"
+          >
+            <option value="">Producto (todos)</option>
+            {uniqueProducts.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+          {uniqueSizes.length > 0 && (
+            <select
+              value={filterSize}
+              onChange={(e) => setFilterSize(e.target.value)}
+              className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300"
+            >
+              <option value="">Talla (todas)</option>
+              {uniqueSizes.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )}
+          {uniqueColors.length > 0 && (
+            <select
+              value={filterColor}
+              onChange={(e) => setFilterColor(e.target.value)}
+              className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300"
+            >
+              <option value="">Color (todos)</option>
+              {uniqueColors.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+        </div>
+      </div>
+
+      {/* Contador de resultados */}
+      <div className="flex items-center justify-between px-4 py-2 text-xs text-gray-500 bg-white border-b border-gray-100">
+        <span>
+          Mostrando <b className="text-gray-700">{orders.length}</b>
+          {orders.length !== allOrders.length && (
+            <span> de {allOrders.length}</span>
+          )} pedido(s)
+        </span>
+      </div>
+
+      {/* Tabla responsive */}
+      {orders.length === 0 ? (
+        <div className="py-12 text-center text-sm text-gray-400">
+          No hay pedidos que coincidan con los filtros.
+        </div>
+      ) : (
+        <>
+          {/* Desktop: tabla tradicional */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs font-semibold uppercase text-gray-500">
+                <tr>
+                  <th className="px-3 py-2.5 text-left">Fecha</th>
+                  <th className="px-3 py-2.5 text-left">Código</th>
+                  <th className="px-3 py-2.5 text-left">Cliente</th>
+                  <th className="px-3 py-2.5 text-left">Ciudad</th>
+                  <th className="px-3 py-2.5 text-left">Producto</th>
+                  <th className="px-3 py-2.5 text-left">Estado</th>
+                  <th className="px-3 py-2.5 text-right">Recaudo</th>
+                  <th className="px-3 py-2.5 text-right">Utilidad</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {orders.map((o) => {
+                  const profit = (o.value_to_collect ?? 0) - (o.product_cost ?? 0)
+                  return (
+                    <tr
+                      key={o.id}
+                      onClick={() => onRowClick(o)}
+                      className="cursor-pointer hover:bg-gray-50"
+                    >
+                      <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{o.order_date}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs text-gray-700">{o.order_code}</td>
+                      <td className="px-3 py-2.5 font-medium text-gray-900 max-w-[200px] truncate">{o.client_name}</td>
+                      <td className="px-3 py-2.5 text-gray-600 max-w-[140px] truncate">{o.city}</td>
+                      <td className="px-3 py-2.5 text-gray-600 font-mono text-xs">{o.product_ref}</td>
+                      <td className="px-3 py-2.5">
+                        <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', statusTone(o.delivery_status))}>
+                          {o.delivery_status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-semibold text-gray-900 whitespace-nowrap">
+                        {formatCurrency(o.value_to_collect ?? 0)}
+                      </td>
+                      <td className={cn(
+                        'px-3 py-2.5 text-right font-semibold whitespace-nowrap',
+                        profit >= 0 ? 'text-emerald-700' : 'text-red-600',
+                      )}>
+                        {formatCurrency(profit)}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Móvil: cards apiladas */}
+          <ul className="md:hidden divide-y divide-gray-50">
+            {orders.map((o) => {
+              const profit = (o.value_to_collect ?? 0) - (o.product_cost ?? 0)
+              return (
+                <li key={o.id}>
+                  <button
+                    type="button"
+                    onClick={() => onRowClick(o)}
+                    className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-sm text-gray-900 truncate">{o.client_name}</p>
+                        <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold', statusTone(o.delivery_status))}>
+                          {o.delivery_status}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-gray-500 font-mono">{o.order_code} · {o.order_date}</p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {o.city || '—'} · {o.product_ref || '—'}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-0.5 shrink-0">
+                      <span className="text-sm font-bold text-gray-900">
+                        {formatCurrency(o.value_to_collect ?? 0)}
+                      </span>
+                      <span className={cn(
+                        'text-[11px] font-semibold',
+                        profit >= 0 ? 'text-emerald-700' : 'text-red-600',
+                      )}>
+                        Util. {formatCurrency(profit)}
+                      </span>
+                    </div>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </>
       )}
     </div>
   )

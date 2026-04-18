@@ -20,7 +20,7 @@ import {
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import type { Order, DailyKPIs } from '@/lib/types'
-import { cn, formatCurrency, getDayOfWeek } from '@/lib/utils'
+import { cn, formatCurrency, getDayOfWeek, sameVendor } from '@/lib/utils'
 import { useUser } from '@/lib/UserContext'
 import { isOwnerSupported } from '@/lib/db'
 import WhatsAppLink from '@/components/shared/WhatsAppLink'
@@ -87,7 +87,7 @@ function computeKPIs(orders: Order[]): DailyKPIs {
     revenueCash: delivered.reduce((s, o) => s + (o.payment_cash ?? 0), 0),
     revenueTransfer: delivered.reduce((s, o) => s + (o.payment_transfer ?? 0), 0),
     totalRevenue: delivered.reduce((s, o) => s + (o.value_to_collect ?? 0), 0),
-    ordersPaola: orders.filter((o) => o.vendor === 'Paola').length,
+    ordersPaola: orders.filter((o) => sameVendor(o.vendor, 'Paola')).length,
     totalCosts: active.reduce((s, o) => s + (o.product_cost ?? 0), 0),
     totalOperatingCosts: active.reduce((s, o) => s + (o.operating_cost ?? 0), 0),
     profit:
