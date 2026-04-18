@@ -2,21 +2,25 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { Printer, X, Type } from 'lucide-react';
+import { Printer, X, Type, Minus, Plus } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
-import { getPrintFontSize, setPrintFontSize, PRINT_FONT_LABELS, type PrintFontSize } from '@/lib/preferences';
+import {
+  getPrintFontSize,
+  setPrintFontSize,
+  getPrintCustomSizes,
+  setPrintCustomSizes,
+  resolvePrintSizes,
+  PRINT_FONT_LABELS,
+  PRINT_SIZE_MIN,
+  PRINT_SIZE_MAX,
+  type PrintFontSize,
+  type PrintSizes,
+} from '@/lib/preferences';
 import { useUser } from '@/lib/UserContext';
 
 type FontSize = PrintFontSize;
 
 const FONT_LABELS = PRINT_FONT_LABELS;
-
-// Font size in pt for print (thermal 58mm paper)
-const FONT_SIZES: Record<FontSize, { body: number; bold: number; header: number; footer: number }> = {
-  small:  { body: 10, bold: 11, header: 10, footer: 8 },
-  medium: { body: 12, bold: 13, header: 11, footer: 9 },
-  large:  { body: 14, bold: 15, header: 12, footer: 10 },
-};
 
 interface OrderData {
   order_code: string;
@@ -59,11 +63,14 @@ function printGuide(rootId: string) {
 export default function DispatchGuide({ order, onClose }: DispatchGuideProps) {
   const owner = useUser();
   const [fontSize, setFontSizeState] = useState<FontSize>('medium');
+  const [customSizes, setCustomSizesState] = useState<PrintSizes>({
+    header: 11, body: 12, bold: 13, footer: 9,
+  });
   const rootId = `dispatch-guide-${order.order_code || 'x'}`;
 
-  // Load persisted preference on mount
   useEffect(() => {
     setFontSizeState(getPrintFontSize(owner));
+    setCustomSizesState(getPrintCustomSizes(owner));
   }, [owner]);
 
   function handleFontSizeChange(size: FontSize) {
@@ -71,19 +78,28 @@ export default function DispatchGuide({ order, onClose }: DispatchGuideProps) {
     setPrintFontSize(owner, size);
   }
 
-  // Cleanup on unmount
+  function adjustCustom(key: keyof PrintSizes, delta: number) {
+    const next: PrintSizes = { ...customSizes, [key]: customSizes[key] + delta };
+    setCustomSizesState(next);
+    setPrintCustomSizes(owner, next);
+  }
+
   useEffect(() => {
     return () => {
       document.documentElement.classList.remove('printing-active');
     };
   }, []);
 
+  const effectiveSizes: PrintSizes = fontSize === 'custom' ? customSizes : resolvePrintSizes(owner);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 no-print">
-      <div className="w-full max-w-xs bg-white rounded-2xl shadow-2xl overflow-hidden">
+      <div className="w-full max-w-xs bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
         {/* Guide preview — this is the ONLY print root when printing */}
-        <div id={rootId} className="print-guide-root" data-font-size={fontSize}>
-          <GuideCard order={order} fontSize={fontSize} />
+        <div className="overflow-y-auto flex-1 px-4 pt-4">
+          <div id={rootId} className="print-guide-root" data-font-size={fontSize}>
+            <GuideCard order={order} sizes={effectiveSizes} />
+          </div>
         </div>
 
         {/* Font size selector */}
@@ -97,7 +113,7 @@ export default function DispatchGuide({ order, onClose }: DispatchGuideProps) {
               <button
                 key={size}
                 onClick={() => handleFontSizeChange(size)}
-                className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition-all ${
+                className={`flex-1 rounded-lg py-1.5 text-[11px] font-semibold transition-all ${
                   fontSize === size
                     ? 'bg-white text-purple-700 shadow-sm'
                     : 'text-gray-500 hover:text-gray-700'
@@ -107,6 +123,24 @@ export default function DispatchGuide({ order, onClose }: DispatchGuideProps) {
               </button>
             ))}
           </div>
+
+          {fontSize === 'custom' && (
+            <div className="mt-2 grid grid-cols-2 gap-2 rounded-xl border border-purple-100 bg-purple-50/40 p-2">
+              {(['header', 'body', 'bold', 'footer'] as const).map((k) => (
+                <SizeStepper
+                  key={k}
+                  label={
+                    k === 'header' ? 'Cabecera' :
+                    k === 'body' ? 'Cuerpo' :
+                    k === 'bold' ? 'Destacado' : 'Pie'
+                  }
+                  value={customSizes[k]}
+                  onDec={() => adjustCustom(k, -0.5)}
+                  onInc={() => adjustCustom(k, 0.5)}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Action buttons — hidden when printing */}
@@ -132,19 +166,37 @@ export default function DispatchGuide({ order, onClose }: DispatchGuideProps) {
   );
 }
 
-/** Reusable guide card. `fontSize` only affects print (via CSS); screen preview always uses small readable size. */
-export function GuideCard({ order, fontSize = 'medium' }: { order: OrderData; fontSize?: FontSize }) {
-  const sizes = FONT_SIZES[fontSize];
+/**
+ * Reusable guide card. `sizes` se aplica como variables CSS consumidas
+ * por el bloque @media print de globals.css. El preview en pantalla
+ * siempre usa clases Tailwind pequeñas y legibles.
+ */
+export function GuideCard({
+  order,
+  sizes,
+  fontSize,
+}: {
+  order: OrderData;
+  sizes?: PrintSizes;
+  fontSize?: FontSize;
+}) {
+  const resolved: PrintSizes =
+    sizes ??
+    (fontSize && fontSize !== 'custom'
+      ? { header: fontSize === 'small' ? 10 : fontSize === 'large' ? 12 : 11,
+          body:   fontSize === 'small' ? 10 : fontSize === 'large' ? 14 : 12,
+          bold:   fontSize === 'small' ? 11 : fontSize === 'large' ? 15 : 13,
+          footer: fontSize === 'small' ?  8 : fontSize === 'large' ? 10 :  9 }
+      : { header: 11, body: 12, bold: 13, footer: 9 });
 
   return (
     <div
       className="border-2 border-black guide-card mx-auto"
       style={{
-        // Expose font sizes as CSS variables for print stylesheet
-        ['--guide-body' as string]: `${sizes.body}pt`,
-        ['--guide-bold' as string]: `${sizes.bold}pt`,
-        ['--guide-header' as string]: `${sizes.header}pt`,
-        ['--guide-footer' as string]: `${sizes.footer}pt`,
+        ['--guide-body' as string]: `${resolved.body}pt`,
+        ['--guide-bold' as string]: `${resolved.bold}pt`,
+        ['--guide-header' as string]: `${resolved.header}pt`,
+        ['--guide-footer' as string]: `${resolved.footer}pt`,
         maxWidth: '220px',
       }}
     >
@@ -159,8 +211,8 @@ export function GuideCard({ order, fontSize = 'medium' }: { order: OrderData; fo
           style={{ filter: 'invert(1)' }}
         />
         <div className="text-white text-center">
-          <p className="font-bold text-xs leading-tight">Tu Tienda</p>
-          <p className="font-bold text-xs leading-tight">Meraki</p>
+          <p className="font-bold leading-tight" style={{ fontSize: `${resolved.header}pt` }}>Tu Tienda</p>
+          <p className="font-bold leading-tight" style={{ fontSize: `${resolved.header}pt` }}>Meraki</p>
         </div>
       </div>
 
@@ -168,37 +220,85 @@ export function GuideCard({ order, fontSize = 'medium' }: { order: OrderData; fo
 
       {/* Body — stacked rows, each with word-wrap */}
       <div className="guide-card-body">
-        <GuideRow value={order.order_code} bold />
-        <GuideRow value={order.client_name} />
-        <GuideRow value={order.phone} />
-        <GuideRow value={order.address} />
-        <GuideRow value={order.complement} />
-        <GuideRow value={order.product_ref} />
-        <GuideRow value={order.detail} />
-        <GuideRow value={formatCurrency(order.value_to_collect)} bold />
-        <GuideRow value={order.comment} />
+        <GuideRow value={order.order_code} bold bodyPt={resolved.body} boldPt={resolved.bold} />
+        <GuideRow value={order.client_name} bodyPt={resolved.body} boldPt={resolved.bold} />
+        <GuideRow value={order.phone} bodyPt={resolved.body} boldPt={resolved.bold} />
+        <GuideRow value={order.address} bodyPt={resolved.body} boldPt={resolved.bold} />
+        <GuideRow value={order.complement} bodyPt={resolved.body} boldPt={resolved.bold} />
+        <GuideRow value={order.product_ref} bodyPt={resolved.body} boldPt={resolved.bold} />
+        <GuideRow value={order.detail} bodyPt={resolved.body} boldPt={resolved.bold} />
+        <GuideRow value={formatCurrency(order.value_to_collect)} bold bodyPt={resolved.body} boldPt={resolved.bold} />
+        <GuideRow value={order.comment} bodyPt={resolved.body} boldPt={resolved.bold} />
       </div>
 
       {/* Footer */}
       <div className="border-t-2 border-black py-1 text-center guide-card-footer">
-        <p className="text-[10px] font-semibold text-gray-700 leading-tight">Mayor Información</p>
-        <p className="text-[10px] font-bold text-gray-900">3203880422.</p>
+        <p className="font-semibold text-gray-700 leading-tight" style={{ fontSize: `${resolved.footer}pt` }}>Mayor Información</p>
+        <p className="font-bold text-gray-900" style={{ fontSize: `${resolved.footer}pt` }}>3203880422.</p>
       </div>
     </div>
   );
 }
 
-function GuideRow({ value, bold }: { value: string | number; bold?: boolean }) {
+function GuideRow({ value, bold, bodyPt, boldPt }: { value: string | number; bold?: boolean; bodyPt?: number; boldPt?: number }) {
   const display = value === 0 ? '$0' : value;
   if (!display) return null;
+  const size = bold ? boldPt : bodyPt;
   return (
     <div className="border-b border-gray-300 px-2 py-1 guide-row">
       <p
-        className={`text-xs ${bold ? 'font-bold text-black' : 'text-gray-900'}`}
-        style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+        className={`${bold ? 'font-bold text-black' : 'text-gray-900'}`}
+        style={{
+          overflowWrap: 'anywhere',
+          wordBreak: 'break-word',
+          fontSize: size ? `${size}pt` : undefined,
+        }}
       >
         {String(display)}
       </p>
+    </div>
+  );
+}
+
+function SizeStepper({
+  label,
+  value,
+  onDec,
+  onInc,
+}: {
+  label: string;
+  value: number;
+  onDec: () => void;
+  onInc: () => void;
+}) {
+  const atMin = value <= PRINT_SIZE_MIN;
+  const atMax = value >= PRINT_SIZE_MAX;
+  return (
+    <div className="rounded-lg bg-white border border-purple-100 px-2 py-1.5">
+      <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">{label}</p>
+      <div className="mt-0.5 flex items-center justify-between gap-1">
+        <button
+          type="button"
+          onClick={onDec}
+          disabled={atMin}
+          aria-label={`Disminuir ${label}`}
+          className="flex h-6 w-6 items-center justify-center rounded-md bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-40"
+        >
+          <Minus className="h-3 w-3" />
+        </button>
+        <span className="text-sm font-bold text-gray-900 tabular-nums">
+          {value.toFixed(1)}<span className="text-[10px] font-normal text-gray-500">pt</span>
+        </span>
+        <button
+          type="button"
+          onClick={onInc}
+          disabled={atMax}
+          aria-label={`Aumentar ${label}`}
+          className="flex h-6 w-6 items-center justify-center rounded-md bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-40"
+        >
+          <Plus className="h-3 w-3" />
+        </button>
+      </div>
     </div>
   );
 }

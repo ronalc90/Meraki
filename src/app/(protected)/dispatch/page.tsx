@@ -25,6 +25,7 @@ import { GuideCard } from '@/components/dispatch/DispatchGuide'
 import WhatsAppLink from '@/components/shared/WhatsAppLink'
 import PageHelpModal from '@/components/shared/PageHelpModal'
 import { DISPATCH_HELP } from '@/lib/pageHelp'
+import { resolvePrintSizes, type PrintSizes } from '@/lib/preferences'
 
 function todayISO(): string {
   const d = new Date()
@@ -45,7 +46,7 @@ function formatDateDisplay(iso: string): string {
 
 // ─── PrintView (Guías) ───────────────────────────────────────────────────────
 
-function PrintView({ orders, onClose }: { orders: Order[]; onClose: () => void }) {
+function PrintView({ orders, onClose, sizes }: { orders: Order[]; onClose: () => void; sizes: PrintSizes }) {
   return (
     <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
       {/* Screen-only toolbar */}
@@ -79,6 +80,7 @@ function PrintView({ orders, onClose }: { orders: Order[]; onClose: () => void }
             return (
               <div key={order.id} className={isLastInPage ? 'guide-page-break' : ''}>
                 <GuideCard
+                  sizes={sizes}
                   order={{
                     order_code: order.order_code,
                     client_name: order.client_name,
@@ -350,6 +352,9 @@ export default function DispatchPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [activeView, setActiveView] = useState<ViewMode | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [printSizes, setPrintSizesState] = useState<PrintSizes>({ header: 11, body: 12, bold: 13, footer: 9 })
+
+  useEffect(() => { setPrintSizesState(resolvePrintSizes(owner)) }, [owner, activeView])
 
   const loadOrders = useCallback(async (d: string) => {
     setLoading(true)
@@ -561,7 +566,7 @@ export default function DispatchPage() {
       )}
 
       {activeView === 'guias' && (
-        <PrintView orders={selectedOrders} onClose={() => setActiveView(null)} />
+        <PrintView orders={selectedOrders} onClose={() => setActiveView(null)} sizes={printSizes} />
       )}
       {activeView === 'ruta' && (
         <RouteView orders={selectedOrders} date={date} onClose={() => setActiveView(null)} />

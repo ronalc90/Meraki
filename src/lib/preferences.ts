@@ -3,7 +3,24 @@
  * Scoped por "owner" (cuenta) para que cada usuario tenga las suyas.
  */
 
-export type PrintFontSize = 'small' | 'medium' | 'large';
+export type PrintFontSize = 'small' | 'medium' | 'large' | 'custom';
+
+export interface PrintSizes {
+  header: number; // pt
+  body: number;
+  bold: number;
+  footer: number;
+}
+
+export const PRINT_PRESETS: Record<Exclude<PrintFontSize, 'custom'>, PrintSizes> = {
+  small:  { header: 10, body: 10, bold: 11, footer: 8 },
+  medium: { header: 11, body: 12, bold: 13, footer: 9 },
+  large:  { header: 12, body: 14, bold: 15, footer: 10 },
+};
+
+export const PRINT_SIZE_MIN = 6;
+export const PRINT_SIZE_MAX = 24;
+const DEFAULT_CUSTOM_SIZES: PrintSizes = { ...PRINT_PRESETS.medium };
 export type UiFontSize = 'small' | 'medium' | 'large' | 'xlarge';
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type UiDensity = 'comfortable' | 'compact';
@@ -53,7 +70,7 @@ function setBool(owner: string | null | undefined, name: string, value: boolean)
 
 export function getPrintFontSize(owner: string | null | undefined): PrintFontSize {
   const v = getString(owner, 'print_font_size');
-  if (v === 'small' || v === 'medium' || v === 'large') return v;
+  if (v === 'small' || v === 'medium' || v === 'large' || v === 'custom') return v;
   return DEFAULT_PRINT_FONT_SIZE;
 }
 
@@ -65,7 +82,46 @@ export const PRINT_FONT_LABELS: Record<PrintFontSize, string> = {
   small: 'Pequeño',
   medium: 'Mediano',
   large: 'Grande',
+  custom: 'Personalizado',
 };
+
+function clampPt(n: number): number {
+  if (!Number.isFinite(n)) return DEFAULT_CUSTOM_SIZES.body;
+  return Math.min(PRINT_SIZE_MAX, Math.max(PRINT_SIZE_MIN, Math.round(n * 10) / 10));
+}
+
+export function getPrintCustomSizes(owner: string | null | undefined): PrintSizes {
+  const raw = getString(owner, 'print_custom_sizes');
+  if (!raw) return { ...DEFAULT_CUSTOM_SIZES };
+  try {
+    const parsed = JSON.parse(raw) as Partial<PrintSizes>;
+    return {
+      header: clampPt(Number(parsed.header ?? DEFAULT_CUSTOM_SIZES.header)),
+      body: clampPt(Number(parsed.body ?? DEFAULT_CUSTOM_SIZES.body)),
+      bold: clampPt(Number(parsed.bold ?? DEFAULT_CUSTOM_SIZES.bold)),
+      footer: clampPt(Number(parsed.footer ?? DEFAULT_CUSTOM_SIZES.footer)),
+    };
+  } catch {
+    return { ...DEFAULT_CUSTOM_SIZES };
+  }
+}
+
+export function setPrintCustomSizes(owner: string | null | undefined, sizes: PrintSizes): void {
+  const clamped: PrintSizes = {
+    header: clampPt(sizes.header),
+    body: clampPt(sizes.body),
+    bold: clampPt(sizes.bold),
+    footer: clampPt(sizes.footer),
+  };
+  setString(owner, 'print_custom_sizes', JSON.stringify(clamped));
+}
+
+/** Devuelve los tamaños efectivos (en pt) según el modo seleccionado. */
+export function resolvePrintSizes(owner: string | null | undefined): PrintSizes {
+  const mode = getPrintFontSize(owner);
+  if (mode === 'custom') return getPrintCustomSizes(owner);
+  return { ...PRINT_PRESETS[mode] };
+}
 
 /* ─────────── UI font size (tamaño de letra aplicación) ─────────── */
 
