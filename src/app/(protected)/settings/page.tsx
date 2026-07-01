@@ -86,6 +86,7 @@ import ExcelImport from '@/components/shared/ExcelImport'
 import { GuideCard } from '@/components/dispatch/DispatchGuide'
 import { playSuccess, playTick, playError } from '@/lib/sound'
 import PageHelpModal from '@/components/shared/PageHelpModal'
+import CatalogQrCard from '@/components/shared/CatalogQrCard'
 import { useModalA11y } from '@/components/shared/useModalA11y'
 import { DESTRUCTIVE_CONFIRM_PHRASE } from '@/lib/assistant/constants'
 import { SETTINGS_HELP } from '@/lib/pageHelp'
@@ -850,6 +851,9 @@ export default function SettingsPage() {
           </p>
         </Section>
         )}
+
+        {/* Catálogo público + QR (Fase D) — operativo */}
+        {!isAdministrativeRole(role) && <CatalogQrCard />}
 
         {/* Importar datos — operativo; solo quienes operan el negocio (no admin/superadmin) */}
         {!isAdministrativeRole(role) && (
