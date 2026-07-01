@@ -32,6 +32,11 @@ export async function POST(request: NextRequest) {
   if (!(ORDER_STATUSES as readonly string[]).includes(status)) {
     return NextResponse.json({ error: 'Estado de pedido inválido' }, { status: 400 });
   }
+  // Defensa en profundidad: las fases de alistamiento sólo existen si la migración
+  // 018 amplió el CHECK. Si no, devolvemos 409 claro en vez de un 500 del UPDATE.
+  if ((status === 'EnAlistamiento' || status === 'Alistado') && !(await isOrderShippingSupported())) {
+    return NextResponse.json({ error: 'Las fases de alistamiento no están disponibles (migración pendiente)' }, { status: 409 });
+  }
 
   // Carga el pedido (acotado por tenant). Si no existe en mi tenant → 404.
   const { data: order, error: readErr } = await scoped.client

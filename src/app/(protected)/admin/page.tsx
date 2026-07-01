@@ -6,6 +6,7 @@ import { UserPlus, ShieldCheck, History } from 'lucide-react';
 import { useTenant } from '@/lib/TenantContext';
 import { roleAtLeast } from '@/lib/tenant';
 import { AUDIT_LABELS, type AuditAction } from '@/lib/audit';
+import ShippingConfigCard from '@/components/admin/ShippingConfigCard';
 
 interface AdminUser {
   id: number;
@@ -308,6 +309,9 @@ export default function AdminPage() {
           {users.length === 0 && <li className="text-xs text-gray-400 py-2">Sin usuarios.</li>}
         </ul>
       </div>
+
+      {/* Transportadora (Fase E) */}
+      <ShippingConfigCard />
 
       {/* Actividad reciente (auditoría) */}
       <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
