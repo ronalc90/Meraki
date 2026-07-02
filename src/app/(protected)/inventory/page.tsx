@@ -21,7 +21,7 @@ import { cn, formatCurrency } from '@/lib/utils'
 import { downloadExcel } from '@/lib/export'
 import { useUser } from '@/lib/UserContext'
 import { getConfirmDestructive } from '@/lib/preferences'
-import { isOwnerSupported } from '@/lib/db'
+import { isOwnerSupported, isInventorySupplierSupported } from '@/lib/db'
 import PhotoCapture from '@/components/shared/PhotoCapture'
 import ImageLightbox from '@/components/shared/ImageLightbox'
 import PageHelpModal from '@/components/shared/PageHelpModal'
@@ -54,9 +54,11 @@ interface ModalProps {
   saving: boolean
   /** Categorías propias del negocio (vienen del padre, según su industria). */
   categories: string[]
+  /** Proveedores activos del negocio (para asignar al INGRESAR la mercancía). */
+  suppliers: Array<{ id: number; name: string }>
 }
 
-function InventoryModal({ item, onClose, onSave, saving, categories }: ModalProps) {
+function InventoryModal({ item, onClose, onSave, saving, categories, suppliers }: ModalProps) {
   const [form, setForm] = useState<Omit<InventoryItem, 'id' | 'created_at'>>(
     item
       ? {
@@ -73,6 +75,7 @@ function InventoryModal({ item, onClose, onSave, saving, categories }: ModalProp
           observations: item.observations ?? '',
           verified: item.verified ?? false,
           image_url: item.image_url ?? '',
+          supplier_id: item.supplier_id ?? null,
         }
       : { ...EMPTY_FORM }
   )
@@ -144,6 +147,20 @@ function InventoryModal({ item, onClose, onSave, saving, categories }: ModalProp
               placeholder="Ej: Cerrada, Abierta"
             />
           </div>
+
+          {suppliers.length > 0 && (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Proveedor (al ingresar)</label>
+              <select
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                value={form.supplier_id ?? ''}
+                onChange={(e) => set('supplier_id', e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">Sin asignar</option>
+                {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Costo (COP)</label>
@@ -275,6 +292,7 @@ export default function InventoryPage() {
     [config.categories],
   )
   const [items, setItems] = useState<InventoryItem[]>([])
+  const [suppliers, setSuppliers] = useState<Array<{ id: number; name: string }>>([])
   const [loading, setLoading] = useState(true)
   const [helpOpen, setHelpOpen] = useState(false)
   const [view, setView] = useState<'verified' | 'defective'>('verified')
@@ -310,6 +328,17 @@ export default function InventoryPage() {
   useEffect(() => {
     loadItems()
   }, [loadItems])
+
+  // Proveedores activos para asignar al ingresar mercancía (Fase A). Si el módulo
+  // no aplica (403) o no hay migración, queda vacío y el select no se muestra.
+  useEffect(() => {
+    let active = true
+    fetch('/api/suppliers', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (active && d?.suppliers) setSuppliers(d.suppliers.filter((s: { active?: boolean }) => s.active !== false).map((s: { id: number; name: string }) => ({ id: s.id, name: s.name }))) })
+      .catch(() => {})
+    return () => { active = false }
+  }, [])
 
   // Bloquea el scroll del fondo mientras haya algún modal/overlay abierto.
   const anyModalOpen = modalOpen || !!deleteConfirm || helpOpen || !!lightboxSrc
@@ -351,14 +380,20 @@ export default function InventoryPage() {
     setSaving(true)
     try {
       const hasOwner = await isOwnerSupported()
+      // supplier_id solo se persiste si la migración 018 añadió la columna.
+      const hasSupplier = await isInventorySupplierSupported()
+      const stripSupplier = (obj: Record<string, unknown>) => {
+        if (!hasSupplier) delete obj.supplier_id
+        return obj
+      }
       if (data.id) {
         const { id, created_at: _ca, ...rest } = data as InventoryItem
-        const { error } = await supabase.from('inventory').update(rest).eq('id', id)
+        const { error } = await supabase.from('inventory').update(stripSupplier({ ...rest })).eq('id', id)
         if (error) throw error
         toast.success('Producto actualizado')
       } else {
         const { id: _id, created_at: _ca, ...rest } = data as InventoryItem
-        const insertPayload: Record<string, unknown> = { ...rest }
+        const insertPayload: Record<string, unknown> = stripSupplier({ ...rest })
         if (hasOwner) insertPayload.owner = owner
         const { error } = await supabase.from('inventory').insert(insertPayload)
         if (error) throw error
@@ -715,6 +750,7 @@ export default function InventoryPage() {
           onSave={handleSave}
           saving={saving}
           categories={categories}
+          suppliers={suppliers}
         />
       )}
 
