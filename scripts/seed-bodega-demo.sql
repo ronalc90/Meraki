@@ -4,7 +4,9 @@
 -- Crea SOLO el tenant nuevo y sus datos demo (no toca a Meraki ni PrimeraMayo).
 -- Idempotente: se puede correr varias veces sin duplicar (guards NOT EXISTS).
 --
--- Prerrequisitos (correr ANTES): migraciones 002, 004, 012, 013 y 016.
+-- Prerrequisitos (correr ANTES): migraciones 002, 004, 012, 013, 016 y (para el
+-- bloque 6: precio/inventario-proveedor/fases/transportadora) la 018. El bloque 6
+-- se salta solo si 018 no está aplicada.
 -- Ejecutar con:  npm run db:exec scripts/seed-bodega-demo.sql
 --
 -- Reproduce el ejemplo del cliente en el "Cierre por proveedor":
@@ -84,3 +86,55 @@ CROSS JOIN (VALUES
 JOIN suppliers s ON s.tenant_id = t.id AND lower(s.name) = lower(v.sname)
 WHERE t.slug = 'bodega-compralo-colombia'
   AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.tenant_id = t.id AND o.order_code = v.code);
+
+-- ============================================================================
+-- 6) SPRINT (migración 018): precio de venta, inventario con proveedor, fases de
+--    alistamiento + transportadora sandbox y catálogo. TODO condicional a que la
+--    migración 018 esté aplicada; si no, este bloque se salta sin error.
+-- ============================================================================
+DO $$
+DECLARE tid INTEGER;
+BEGIN
+  SELECT id INTO tid FROM tenants WHERE slug = 'bodega-compralo-colombia';
+  IF tid IS NULL THEN RETURN; END IF;
+
+  -- 6a) Precio de venta para el catálogo público (products.price, 018).
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='price') THEN
+    UPDATE products SET price = CASE code
+      WHEN 'A001' THEN 750000 WHEN 'B002' THEN 1500000 WHEN 'C003' THEN 1400000 ELSE price END
+    WHERE tenant_id = tid AND code IN ('A001','B002','C003');
+  END IF;
+
+  -- 6b) Inventario con proveedor asignado al INGRESAR (inventory.supplier_id, 018).
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='inventory' AND column_name='supplier_id') THEN
+    INSERT INTO inventory (tenant_id, basket_location, product_id, category, type, reference,
+                           model, color, size, quantity, status, observations, verified, supplier_id)
+    SELECT tid, v.basket, v.pid, 'General', '', v.cost, v.model, '', 'Única', v.qty, 'Bueno', 'Demo', true, s.id
+    FROM (VALUES
+      ('A1','A001','Producto A', 500000, 20, 'Distribuidora Andina'),
+      ('A2','B002','Producto B', 1000000, 15, 'Importex'),
+      ('A3','C003','Producto C', 1000000, 8,  'Mayorista Caribe')
+    ) AS v(basket, pid, model, cost, qty, sname)
+    JOIN suppliers s ON s.tenant_id = tid AND lower(s.name) = lower(v.sname)
+    WHERE NOT EXISTS (SELECT 1 FROM inventory i WHERE i.tenant_id = tid AND i.product_id = v.pid);
+  END IF;
+
+  -- 6c) Fases de alistamiento + tracking sandbox (018 amplió chk_orders_status y
+  --     añadió carrier/tracking). Deja pedidos en distintas fases para demostrar
+  --     el flujo completo (alistamiento → despachado con guía → entregado).
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='carrier') THEN
+    UPDATE orders SET delivery_status = 'EnAlistamiento' WHERE tenant_id = tid AND order_code = 'BCC-003';
+    UPDATE orders SET delivery_status = 'Enviado', carrier = 'sandbox', tracking_number = 'SBX00000001',
+                      tracking_status = 'in_transit', tracking_updated_at = now(), guide_number = 'SBX00000001'
+      WHERE tenant_id = tid AND order_code = 'BCC-002';
+    UPDATE orders SET carrier = 'sandbox', tracking_number = 'SBX00000002', tracking_status = 'delivered',
+                      tracking_updated_at = now(), guide_number = 'SBX00000002'
+      WHERE tenant_id = tid AND order_code = 'BCC-001';
+  END IF;
+
+  -- 6d) Transportadora del tenant = sandbox habilitado (tenants.shipping_config, 018).
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tenants' AND column_name='shipping_config') THEN
+    UPDATE tenants SET shipping_config = '{"carrier":"sandbox","enabled":true}'::jsonb
+      WHERE id = tid AND shipping_config IS NULL;
+  END IF;
+END $$;
